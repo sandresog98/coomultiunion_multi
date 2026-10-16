@@ -105,6 +105,56 @@ final class PortalService
         ];
     }
 
+    // ── Elegibilidad crédito cooperativa para boletas (convenios) ─────────
+    /** Antigüedad del asociado en meses (desde vw_asociados.fecha_ingreso). */
+    public function antiguedadMeses(string $cedula): int
+    {
+        $st = $this->db->prepare('SELECT fecha_ingreso FROM vw_asociados WHERE cedula = ? LIMIT 1');
+        $st->execute([$cedula]);
+        $f = $st->fetchColumn();
+        if (!$f) {
+            return 0;
+        }
+        try {
+            $desde = new DateTime((string) $f);
+        } catch (Throwable $e) {
+            return 0;
+        }
+        $d = $desde->diff(new DateTime('today'));
+        return ((int) $d->y) * 12 + (int) $d->m;
+    }
+
+    /** Cantidad de pagos de aportes ordinarios positivos (cuenta 31050501) en toda la historia. */
+    public function aportesOrdinariosPositivos(string $cedula): int
+    {
+        $st = $this->db->prepare(
+            "SELECT COUNT(*) FROM sifone_movimientos_tributarios
+              WHERE cedula = ? AND cuenta = 31050501 AND credit > 0"
+        );
+        $st->execute([$cedula]);
+        return (int) $st->fetchColumn();
+    }
+
+    /** Reglas del crédito cooperativa para boletas: N meses de antigüedad O N aportes; límite configurable. */
+    public function elegibleCreditoBoleta(string $cedula): array
+    {
+        require_once dirname(__DIR__) . '/config/ConfigService.php';
+        $cfg     = (new ConfigService())->creditoBoleta();
+        $meses   = $this->antiguedadMeses($cedula);
+        $aportes = $this->aportesOrdinariosPositivos($cedula);
+        $cumpleAntig   = $meses >= $cfg['meses_min'];
+        $cumpleAportes = $aportes >= $cfg['aportes_min'];
+        return [
+            'apto'               => $cumpleAntig || $cumpleAportes,
+            'cumple_antiguedad'  => $cumpleAntig,
+            'cumple_aportes'     => $cumpleAportes,
+            'antiguedad_meses'   => $meses,
+            'aportes'            => $aportes,
+            'requisitos'         => ['meses_min' => $cfg['meses_min'], 'aportes_min' => $cfg['aportes_min']],
+            'limite'             => $cfg['limite'],
+        ];
+    }
+
     // ── Movimientos (pagos/transacciones) ────────────────────────────────
     public function movimientos(string $cedula, string $mes = ''): array
     {
@@ -375,7 +425,7 @@ final class PortalService
     {
         $pdo = $this->db;
         $st = $pdo->query(
-            "SELECT c.id, c.nombre, c.descripcion, c.activo
+            "SELECT c.id, c.nombre, c.descripcion, c.imagen, c.activo
              FROM convenios c
              WHERE c.activo = 1
              ORDER BY c.nombre"
@@ -402,6 +452,7 @@ final class PortalService
                     'id' => (int) $c['id'],
                     'nombre' => $c['nombre'],
                     'descripcion' => $c['descripcion'],
+                    'tiene_imagen' => trim((string) ($c['imagen'] ?? '')) !== '',
                     'productos' => $productos,
                 ];
             }

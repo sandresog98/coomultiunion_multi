@@ -113,12 +113,22 @@ final class EmailCola
         $categoria = (string) ($s['tipo_codigo'] ?? 'solicitud');
         $resultado = (string) ($s['resultado'] ?? ($s['estado_codigo'] ?? ''));
         $asunto = 'Solicitud ' . strtoupper($categoria) . ' #' . ($s['id'] ?? '') . ' — respondida';
+
+        // Enlace de calificación (token) si la solicitud lo generó.
+        $urlCalificar = null;
+        $token = (string) ($d['calificacion']['token_acceso'] ?? '');
+        if ($token !== '') {
+            $base = rtrim((string) (env('APP_URL') ?? ''), '/');
+            $urlCalificar = $base . '/cx/calificar?t=' . urlencode($token);
+        }
+
         $cuerpo = EmailTemplates::solicitudRespondida(
             (string) ($s['asociado_nombre'] ?? ''),
             $categoria,
             (int) ($s['id'] ?? 0),
             $resultado !== '' ? $resultado : 'respondida',
-            $comentario
+            $comentario,
+            $urlCalificar
         );
         self::encolar('respondida', $email, $asunto, $cuerpo, isset($s['id']) ? (int) $s['id'] : null);
     }

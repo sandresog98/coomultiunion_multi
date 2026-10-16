@@ -1863,6 +1863,7 @@ CREATE TABLE IF NOT EXISTS solicitudes_det_boleta (
   solicitud_id     INT NOT NULL,            -- FK: solicitudes.id
   motivo           TEXT NULL,
   direccion_entrega VARCHAR(255) NULL,
+  metodo_pago      VARCHAR(20) NULL,        -- 'qr' | 'credito'
   PRIMARY KEY (solicitud_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -2048,5 +2049,16 @@ CREATE TABLE IF NOT EXISTS login_intentos (
   intento_at  DATETIME NOT NULL,
   INDEX idx_li_clave (clave),
   INDEX idx_li_at (intento_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- #####################################################################
+-- ############ CONFIGURACIÃ“N (parÃ¡metros clave/valor) #################
+-- #####################################################################
+CREATE TABLE IF NOT EXISTS app_configuracion (
+  clave               VARCHAR(60)  NOT NULL,
+  valor               TEXT         NULL,
+  descripcion         VARCHAR(255) NULL,
+  fecha_actualizacion DATETIME     NULL,
+  PRIMARY KEY (clave)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

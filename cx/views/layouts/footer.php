@@ -9,6 +9,7 @@ require_once dirname(__DIR__, 2) . '/_env.php';
 </footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= $APP ?>/assets/js/common.js"></script>
+<script src="<?= $APP ?>/assets/js/theme.js"></script>
 <script>
 (function(){
   var ov=document.getElementById('cx-drawer-overlay'),

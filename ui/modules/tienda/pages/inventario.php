@@ -10,18 +10,21 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-boxes me-2"></i>Inventario</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
   </div>
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label>
         <input class="form-control" id="q" placeholder="Producto…"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Categoría</label>
-        <select class="form-select" id="catF" style="width:170px"></select></div>
+        <select class="form-select" id="catF" data-searchable style="width:170px"></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Marca</label>
-        <select class="form-select" id="marF" style="width:170px"></select></div>
+        <select class="form-select" id="marF" data-searchable style="width:170px"></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-        <select class="form-select" id="estF" style="width:150px"><option value="">Todos</option><option value="disponible">Con disponibilidad</option><option value="vendido">Con vendidos</option></select></div>
+        <select class="form-select" id="estF" data-searchable style="width:150px"><option value="">Todos</option><option value="disponible">Con disponibilidad</option><option value="vendido">Con vendidos</option></select></div>
     </div>
     <div id="alert" class="alert d-none"></div>
     <div class="table-responsive">
@@ -65,8 +68,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert');
-let state={q:'',cat:'',mar:'',est:'',page:0,order:'nombre',dir:'ASC'};
+const alertBox=document.getElementById('alert');
+let state={q:'',cat:'',mar:'',est:'',page:0,size:20,order:'nombre',dir:'ASC'};
 let det=null;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
@@ -93,11 +96,11 @@ let t;
 for(const id of ['q','catF','marF','estF'])document.getElementById(id).addEventListener('input',function(){clearTimeout(t);t=setTimeout(()=>{
   state.q=document.getElementById('q').value.trim();state.cat=document.getElementById('catF').value;state.mar=document.getElementById('marF').value;state.est=document.getElementById('estF').value;state.page=0;cargar();},300);});
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(state.q)}&categoria_id=${state.cat}&marca_id=${state.mar}&estado=${state.est}&limit=${PAGE_SIZE}&offset=${off}&order=${state.order}&dir=${state.dir}`;
+  const off=state.page*state.size;
+  const p=`q=${encodeURIComponent(state.q)}&categoria_id=${state.cat}&marca_id=${state.mar}&estado=${state.est}&limit=${state.size}&offset=${off}&order=${state.order}&dir=${state.dir}`;
   try{
     const d=await api('tienda/stock.php?action=listar&'+p);
-    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+state.size,d.total)} de ${d.total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">${esc(a.nombre)}</td><td>${esc(a.categoria_nombre)}</td><td>${esc(a.marca_nombre)}</td>
@@ -109,7 +112,7 @@ async function cargar(){
   }catch(e){showA(e.message,false);}
 }
 function renderPagination(total){
-  const N=Math.ceil(total/PAGE_SIZE),el=document.getElementById('paginacion'),C=state.page;
+  const N=Math.ceil(total/state.size),el=document.getElementById('paginacion'),C=state.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h='';if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`;
@@ -150,6 +153,7 @@ function renderRev(){
     ||'<tr><td colspan="5" class="text-center text-muted">Sin reversiones</td></tr>'+'</tbody>';
 }
 
+window.Listado.mountSize('fSizeBox', state, cargar);
 cargar();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

@@ -35,7 +35,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
     <div class="row g-3 mb-3">
       <div class="col-md-6">
         <label class="form-label small text-muted mb-0">Producto (boleta)</label>
-        <select class="form-select form-select-sm" id="fProducto"><option value="0">Todos</option></select>
+        <select class="form-select form-select-sm" id="fProducto" data-searchable><option value="0">Todos</option></select>
       </div>
     </div>
 
@@ -69,7 +69,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
       </div>
     </div>
 
-    <div class="mb-2"><span class="badge text-bg-info" id="infoTotal">Mostrando 0-0 de 0</span></div>
+    <div class="mb-2 d-flex align-items-center gap-2"><span class="badge text-bg-info" id="infoTotal">Mostrando 0-0 de 0</span><span id="fSizeBox"></span></div>
     <div class="table-responsive">
       <table class="table table-hover align-middle table-sm">
         <thead><tr>
@@ -218,7 +218,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 </div>
 
 <script>
-const API = <?php echo json_encode(apiUrl()); ?>, U = <?php echo json_encode(uiBaseUrl()); ?>, PAGE_SIZE = 20;
+const API = <?php echo json_encode(apiUrl()); ?>, U = <?php echo json_encode(uiBaseUrl()); ?>;
 const ACC = <?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_VENDER=ACC['convenios.stock.vender']===true;
 const CAN_CONT  =ACC['convenios.stock.contabilizar']===true;
@@ -228,7 +228,7 @@ const CAN_DESANULAR=ACC['convenios.stock.desanular']===true;
 const CAN_ELIMINAR=ACC['convenios.stock.eliminar']===true;
 const alertBox = document.getElementById('alert');
 let modalNueva, modalVender, modalCont, modalArchivo, modalTimeline, modalCarga;
-let debounceTimer, state = { prod:0, estados:['disponible','vendida','contabilizada'], q:'', cedula:'', fvDesde:'', fvHasta:'', page:0, order:'fecha_creacion', dir:'DESC' };
+let debounceTimer, state = { prod:0, estados:['disponible','vendida','contabilizada'], q:'', cedula:'', fvDesde:'', fvHasta:'', page:0, size:20, order:'fecha_creacion', dir:'DESC' };
 const ROW = {}; // filas por id para las acciones (evita JSON en atributos onclick)
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -279,13 +279,13 @@ async function cargarProductos(){
 }
 
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
+  const off=state.page*state.size;
   const est=state.estados.join(',');
-  const bs=`producto_id=${state.prod}&estados[]=${est.split(',').join('&estados[]=')}&q=${encodeURIComponent(state.q)}&cedula=${encodeURIComponent(state.cedula)}&fecha_vendida_desde=${state.fvDesde}&fecha_vendida_hasta=${state.fvHasta}&order=${state.order}&dir=${state.dir}&limit=${PAGE_SIZE}&offset=${off}`;
+  const bs=`producto_id=${state.prod}&estados[]=${est.split(',').join('&estados[]=')}&q=${encodeURIComponent(state.q)}&cedula=${encodeURIComponent(state.cedula)}&fecha_vendida_desde=${state.fvDesde}&fecha_vendida_hasta=${state.fvHasta}&order=${state.order}&dir=${state.dir}&limit=${state.size}&offset=${off}`;
   try{
     const d=await api('boletas/listar?'+bs);
     const total=d.total||0;
-    document.getElementById('infoTotal').textContent=total?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotal').textContent=total?`Mostrando ${off+1}-${Math.min(off+state.size,total)} de ${total}`:'';
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       ROW[r.id] = { serial: r.serial, precio: r.precio_venta_snapshot };
       return `
@@ -313,7 +313,7 @@ async function cargar(){
   }catch(e){showAlert(e.message);}
 }
 function renderPagination(t){
-  const N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
+  const N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
   let C=state.page,h=[];
   if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`);
   for(let i=0;i<N;i++)h.push(`<li class="page-item ${i===C?'active':''}"><a class="page-link" href="#" onclick="go(${i})">${i+1}</a></li>`);
@@ -538,7 +538,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     state.page=0;cargar();
   }));
   document.getElementById('fProducto').addEventListener('change',function(){state.prod=parseInt(this.value||'0');state.page=0;cargar();cargarKpis();});
-  cargarProductos().then(()=>{cargarKpis();cargar();});
+  cargarProductos().then(()=>{cargarKpis();window.Listado.mountSize('fSizeBox', state, cargar, {class:'small text-muted'});cargar();});
 });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

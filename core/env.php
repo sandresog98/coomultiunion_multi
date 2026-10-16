@@ -49,4 +49,21 @@ if (!function_exists('env')) {
         $val = getenv($key);
         return $val === false ? $default : $val;
     }
+
+    /**
+     * Entorno de la aplicación: 'local' | 'test' | 'production'.
+     * Se usa para distinguir visualmente el entorno (p. ej. el sidebar en pruebas).
+     */
+    function app_env(): string
+    {
+        return (string) env('APP_ENV', 'production');
+    }
+
+    /**
+     * Etiqueta visible del entorno (vacío en producción). Ej: 'PRUEBAS', 'LOCAL'.
+     */
+    function env_label(): string
+    {
+        return ['test' => 'PRUEBAS', 'local' => 'LOCAL'][app_env()] ?? '';
+    }
 }

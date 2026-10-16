@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once dirname(__DIR__, 3) . '/_env.php';
 $id = (int) ($_GET['id'] ?? 0);
-if ($id <= 0) { header('Location: ' . $CX . '/modules/solicitud_credito/pages/mis_solicitudes'); exit; }
+if ($id <= 0) { header('Location: ' . cx_url('solicitar-credito')); exit; }
 $pageTitle = 'Documentos de solicitud';
 $activeNav = 'solic';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';

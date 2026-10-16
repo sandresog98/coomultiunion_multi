@@ -13,7 +13,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-sliders me-2"></i>Productos y cláusulas</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
     <?php if ($canCrear): ?>
     <button class="btn btn-light btn-sm" onclick="abrir()"><i class="fas fa-plus me-1"></i>Nuevo</button>
     <?php endif; ?>
@@ -78,9 +81,8 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 const API = <?php echo json_encode(apiUrl()); ?>;
 const ACC = <?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['config.editar']===true,CAN_ELIM=ACC['config.eliminar']===true;
-const PAGE_SIZE = 20;
 const alertBox=document.getElementById('alert');
-let state = { q: '', page: 0, order: 'tipo', dir: 'ASC' };
+let state = { q: '', page: 0, size: 20, order: 'tipo', dir: 'ASC' };
 let editId = null, modal, debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -115,12 +117,12 @@ document.getElementById('q').addEventListener('input',()=>{
 
 // ── Datos ──
 async function cargar(){
-  const offset = state.page * PAGE_SIZE;
-  const params = `q=${encodeURIComponent(state.q)}&limit=${PAGE_SIZE}&offset=${offset}&order=${state.order}&dir=${state.dir}`;
+  const offset = state.page * state.size;
+  const params = `q=${encodeURIComponent(state.q)}&limit=${state.size}&offset=${offset}&order=${state.order}&dir=${state.dir}`;
   try{
     const d = await api('productos/catalogo?'+params);
     const total = d.total||0;
-    document.getElementById('infoTotal').textContent = total > 0 ? `Mostrando ${offset+1}-${Math.min(offset+PAGE_SIZE, total)} de ${total}` : '';
+    document.getElementById('infoTotal').textContent = total > 0 ? `Mostrando ${offset+1}-${Math.min(offset+state.size, total)} de ${total}` : '';
     renderSortIcons();
     document.getElementById('tbody').innerHTML = (d.rows||[]).map(r=>`<tr>
       <td>${esc(r.nombre)}<br><small class="text-muted">${esc(r.descripcion||'')}</small></td>
@@ -139,7 +141,7 @@ async function cargar(){
 
 // ── Paginación ──
 function renderPagination(total){
-  const N = Math.ceil(total / PAGE_SIZE);
+  const N = Math.ceil(total / state.size);
   if (N <= 1) { document.getElementById('paginacion').innerHTML = ''; return; }
   const C = state.page; let pages = [];
   if (N <= 10) { for (let i = 0; i < N; i++) pages.push(i); }
@@ -201,6 +203,6 @@ async function elim(id, nombre){
   catch(e){alert(e.message);}
 }
 
-document.addEventListener('DOMContentLoaded',()=>{ modal=new bootstrap.Modal('#m'); cargar(); });
+document.addEventListener('DOMContentLoaded',()=>{ modal=new bootstrap.Modal('#m'); window.Listado.mountSize('fSizeBox', state, cargar); cargar(); });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

@@ -17,6 +17,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <span><i class="fas fa-tags me-2"></i>Promociones</span>
     <span class="d-flex gap-2 align-items-center">
       <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
       <?php if ($canCrear): ?>
       <button class="btn btn-light btn-sm" onclick="abrirModal()"><i class="fas fa-plus me-1"></i>Nueva promoción</button>
       <?php endif; ?>
@@ -27,9 +28,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
       <div class="col-auto" style="max-width:300px"><label class="form-label small text-muted mb-0">Buscar</label>
         <input class="form-control" id="q" placeholder="Producto, categoría o marca…"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-        <select class="form-select" id="estF" style="width:130px"><option value="">Todos</option><option value="1">Activa</option><option value="0">Inactiva</option></select></div>
+        <select class="form-select" id="estF" data-searchable style="width:130px"><option value="">Todos</option><option value="1">Activa</option><option value="0">Inactiva</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Otros</label>
-        <select class="form-select" id="vigF" style="width:150px"><option value="">Todas</option><option value="1">Solo vigentes</option></select></div>
+        <select class="form-select" id="vigF" data-searchable style="width:150px"><option value="">Todas</option><option value="1">Solo vigentes</option></select></div>
     </div>
     <div id="alert" class="alert d-none"></div>
     <div class="table-responsive">
@@ -78,8 +79,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['tienda.promociones.editar']===true,CAN_TOGGLE=ACC['tienda.promociones.toggle']===true,CAN_ELIM=ACC['tienda.promociones.eliminar']===true;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert');
-let state={q:'',est:'',vig:'',page:0,order:'id',dir:'DESC'};
+const alertBox=document.getElementById('alert');
+let state={q:'',est:'',vig:'',page:0,size:20,order:'id',dir:'DESC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
@@ -96,11 +97,11 @@ let t;
 for(const id of ['q','estF','vigF'])document.getElementById(id).addEventListener('input',function(){clearTimeout(t);t=setTimeout(()=>{
   state.q=document.getElementById('q').value.trim();state.est=document.getElementById('estF').value;state.vig=document.getElementById('vigF').value;state.page=0;cargar();},300);});
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(state.q)}&estado=${state.est}&solo_vigentes=${state.vig}&limit=${PAGE_SIZE}&offset=${off}&order=${state.order}&dir=${state.dir}`;
+  const off=state.page*state.size;
+  const p=`q=${encodeURIComponent(state.q)}&estado=${state.est}&solo_vigentes=${state.vig}&limit=${state.size}&offset=${off}&order=${state.order}&dir=${state.dir}`;
   try{
     const d=await api('tienda/promociones.php?action=listar&'+p);
-    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+state.size,d.total)} de ${d.total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">${esc(a.producto_nombre)}</td>
@@ -117,7 +118,7 @@ async function cargar(){
   }catch(e){showA(e.message,false);}
 }
 function renderPagination(total){
-  const N=Math.ceil(total/PAGE_SIZE),el=document.getElementById('paginacion'),C=state.page;
+  const N=Math.ceil(total/state.size),el=document.getElementById('paginacion'),C=state.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h='';if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`;
@@ -164,6 +165,7 @@ async function guardar(e){
 async function toggle(id){try{await post('tienda/promociones.php?action=toggle&id='+id,{});cargar();}catch(e){showA(e.message,false);}}
 async function eliminar(id){if(!confirm('¿Eliminar promoción?'))return;try{await post('tienda/promociones.php?action=eliminar&id='+id,{});cargar();}catch(e){showA(e.message,false);}}
 
+window.Listado.mountSize('fSizeBox', state, cargar);
 cargar();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

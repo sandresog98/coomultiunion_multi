@@ -17,6 +17,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <span><i class="fas fa-users me-2"></i>Clientes</span>
     <span class="d-flex gap-2 align-items-center">
       <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
       <?php if ($canCrear): ?>
       <button class="btn btn-light btn-sm" onclick="abrirModal()"><i class="fas fa-plus me-1"></i>Nuevo cliente</button>
       <?php endif; ?>
@@ -27,9 +28,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
       <div class="col-auto" style="max-width:300px"><label class="form-label small text-muted mb-0">Buscar</label>
         <input class="form-control" id="q" placeholder="Nombre, documento, teléfono…"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Tipo</label>
-        <select class="form-select" id="tipoF" style="width:140px"><option value="">Todos</option><option value="externo">Externo</option><option value="asociado">Asociado</option></select></div>
+        <select class="form-select" id="tipoF" data-searchable style="width:140px"><option value="">Todos</option><option value="externo">Externo</option><option value="asociado">Asociado</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-        <select class="form-select" id="estF" style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
+        <select class="form-select" id="estF" data-searchable style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
     </div>
     <div id="alert" class="alert d-none"></div>
     <div class="table-responsive">
@@ -85,8 +86,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['tienda.clientes.editar']===true,CAN_TOGGLE=ACC['tienda.clientes.toggle']===true,CAN_ELIM=ACC['tienda.clientes.eliminar']===true;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert');
-let state={q:'',tipo:'',estado:'',page:0,order:'nombre',dir:'ASC'};
+const alertBox=document.getElementById('alert');
+let state={q:'',tipo:'',estado:'',page:0,size:20,order:'nombre',dir:'ASC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
 function post(p,d){return api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
@@ -106,11 +107,11 @@ for(const id of ['q','tipoF','estF']){
   el.addEventListener('input',function(){clearTimeout(t);t=setTimeout(()=>{state.q=document.getElementById('q').value.trim();state.tipo=document.getElementById('tipoF').value;state.estado=document.getElementById('estF').value;state.page=0;cargar();},300);});
 }
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(state.q)}&tipo=${state.tipo}&estado=${state.estado}&limit=${PAGE_SIZE}&offset=${off}&order=${state.order}&dir=${state.dir}`;
+  const off=state.page*state.size;
+  const p=`q=${encodeURIComponent(state.q)}&tipo=${state.tipo}&estado=${state.estado}&limit=${state.size}&offset=${off}&order=${state.order}&dir=${state.dir}`;
   try{
     const d=await api('tienda/clientes.php?action=listar&'+p);
-    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+state.size,d.total)} de ${d.total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">${esc(a.nombre)}</td><td>${esc(a.nit_cedula||'')}</td><td>${esc(a.cedula||'')}</td>
@@ -126,7 +127,7 @@ async function cargar(){
   }catch(e){showA(e.message,false);}
 }
 function renderPagination(total){
-  const N=Math.ceil(total/PAGE_SIZE), el=document.getElementById('paginacion'), C=state.page;
+  const N=Math.ceil(total/state.size), el=document.getElementById('paginacion'), C=state.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[]; if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h=''; if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`;
@@ -193,6 +194,6 @@ document.getElementById('asocBuscar').addEventListener('input',function(){
 });
 function pickAsoc(c,n){document.getElementById('asocCedula').value=c;document.getElementById('asocBuscar').value=n;document.getElementById('resAsoc').innerHTML='';}
 
-tipoChange(); cargar();
+tipoChange(); window.Listado.mountSize('fSizeBox', state, cargar); cargar();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

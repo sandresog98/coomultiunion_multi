@@ -65,7 +65,7 @@ private const DETALLE_COLS = [
         'solicitudes_det_redencion'           => ['val_bolsillos', 'val_incentivos', 'val_comisiones', 'total_redimir', 'medio_redencion', 'comentarios'],
         'solicitudes_det_nuevo_prod'          => ['producto_id', 'dia_pago', 'valor'],
         'solicitudes_det_ticket'              => ['categoria_id', 'resumen', 'descripcion', 'fecha_vencimiento'],
-        'solicitudes_det_boleta'              => ['motivo', 'direccion_entrega'],
+        'solicitudes_det_boleta'              => ['motivo', 'direccion_entrega', 'metodo_pago'],
         'solicitudes_det_retiro_incentivos'   => ['val_incentivos', 'val_comisiones', 'total_retiro', 'medio'],
         'solicitudes_det_certificado'         => ['especie', 'anio'],
         'solicitudes_det_fondo'               => ['convenio_id', 'opcion_elegida', 'ruta_pdf_obligatorio', 'observaciones', 'fecha_uso', 'bloqueado_hasta'],
@@ -150,24 +150,31 @@ private const DETALLE_COLS = [
      * (tipo, estado, solicitante, responsable). Filtros: tipo, estado, fase, cédula,
      * responsable, radicado (LIKE), q (búsqueda por radicado/cédula/nombre).
      */
-    public function listar(array $f, int $limit = 50, int $offset = 0): array
+    /** Condiciones WHERE compartidas por listar() y contarPorTipo(). */
+    private function filtrosWhere(array $f, bool $conTipo = true): array
     {
         $w = [];
         $p = [];
-        if (!empty($f['tipo']))        { $w[] = 's.tipo_codigo = ?';        $p[] = $f['tipo']; }
-        if (!empty($f['estado']))      { $w[] = 's.estado_codigo = ?';      $p[] = $f['estado']; }
-        if (!empty($f['fase']))        { $w[] = 's.fase = ?';               $p[] = $f['fase']; }
-        if (!empty($f['cedula']))      { $w[] = 's.cedula_solicitante = ?'; $p[] = $f['cedula']; }
-        if (!empty($f['responsable'])) { $w[] = 's.responsable_id = ?';     $p[] = (int) $f['responsable']; }
+        if ($conTipo && !empty($f['tipo'])) { $w[] = 's.tipo_codigo = ?';        $p[] = $f['tipo']; }
+        if (!empty($f['estado']))           { $w[] = 's.estado_codigo = ?';      $p[] = $f['estado']; }
+        if (!empty($f['fase']))             { $w[] = 's.fase = ?';               $p[] = $f['fase']; }
+        if (!empty($f['cedula']))           { $w[] = 's.cedula_solicitante = ?'; $p[] = $f['cedula']; }
+        if (!empty($f['responsable']))      { $w[] = 's.responsable_id = ?';     $p[] = (int) $f['responsable']; }
         if (!empty($f['radicado'])) {
             $w[] = 's.numero_radicado LIKE ?';
             $p[] = '%' . $f['radicado'] . '%';
         }
         if (!empty($f['q'])) {
             $like = '%' . $f['q'] . '%';
-            $w[] = '(s.numero_radicado LIKE ? OR s.cedula_solicitante LIKE ? OR COALESCE(sa.nombre,\'\') LIKE ?)';
+            $w[] = '(s.numero_radicado LIKE ? OR s.cedula_solicitante LIKE ? OR COALESCE(sa.nombre, su.nombre_completo, \'\') LIKE ?)';
             $p = array_merge($p, [$like, $like, $like]);
         }
+        return [$w, $p];
+    }
+
+    public function listar(array $f, int $limit = 50, int $offset = 0): array
+    {
+        [$w, $p] = $this->filtrosWhere($f, true);
         $wc = $w ? ' WHERE ' . implode(' AND ', $w) : '';
 
         $pedido = (string) ($f['order'] ?? 'fecha_creacion');
@@ -177,6 +184,7 @@ private const DETALLE_COLS = [
         $st = $this->db->prepare(
             "SELECT COUNT(*) FROM solicitudes s
                LEFT JOIN sifone_asociados sa ON sa.cedula = s.cedula_solicitante
+               LEFT JOIN usuarios su ON s.solicitante_tipo = 'interno' AND su.id = s.cedula_solicitante
              $wc"
         );
         $st->execute($p);
@@ -184,7 +192,7 @@ private const DETALLE_COLS = [
 
         $sql = "SELECT s.id, s.numero_radicado, s.tipo_codigo, t.nombre AS tipo_nombre,
                        s.fase, s.estado_codigo, e.nombre AS estado_nombre,
-                       s.cedula_solicitante, sa.nombre AS solicitante_nombre,
+                       s.cedula_solicitante, COALESCE(sa.nombre, su.nombre_completo) AS solicitante_nombre,
                        s.solicitante_tipo, s.responsable_id,
                        u.nombre_completo AS responsable_nombre,
                        s.resultado, s.fecha_creacion, s.fecha_respuesta
@@ -192,6 +200,7 @@ private const DETALLE_COLS = [
                 LEFT JOIN solicitudes_tipos t ON t.codigo = s.tipo_codigo
                 LEFT JOIN solicitudes_estados e ON e.tipo_codigo = s.tipo_codigo AND e.codigo = s.estado_codigo
                 LEFT JOIN sifone_asociados sa ON sa.cedula = s.cedula_solicitante
+                LEFT JOIN usuarios su ON s.solicitante_tipo = 'interno' AND su.id = s.cedula_solicitante
                 LEFT JOIN usuarios u ON u.id = s.responsable_id
                 $wc
                 ORDER BY `$orderBy` $orderDir, s.id DESC
@@ -199,6 +208,39 @@ private const DETALLE_COLS = [
         $st = $this->db->prepare($sql);
         $st->execute($p);
         return ['rows' => $st->fetchAll(), 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+    }
+
+    /** Conteo por tipo (ignora el filtro de tipo) para los chips del listado. */
+    public function contarPorTipo(array $f): array
+    {
+        [$w, $p] = $this->filtrosWhere($f, false);
+        $wc = $w ? ' WHERE ' . implode(' AND ', $w) : '';
+        $st = $this->db->prepare(
+            "SELECT s.tipo_codigo, COUNT(*) AS n FROM solicitudes s
+               LEFT JOIN sifone_asociados sa ON sa.cedula = s.cedula_solicitante
+               LEFT JOIN usuarios su ON s.solicitante_tipo = 'interno' AND su.id = s.cedula_solicitante
+             $wc GROUP BY s.tipo_codigo"
+        );
+        $st->execute($p);
+        $out = [];
+        foreach ($st->fetchAll() as $r) {
+            $out[(string) $r['tipo_codigo']] = (int) $r['n'];
+        }
+        return $out;
+    }
+
+    /** Nombre del solicitante (asociado por cédula, interno por id de usuario). */
+    public function nombreSolicitante(string $cedula, string $tipo): ?string
+    {
+        if ($tipo === 'interno') {
+            $st = $this->db->prepare("SELECT nombre_completo FROM usuarios WHERE id = ? LIMIT 1");
+            $st->execute([(int) $cedula]);
+        } else {
+            $st = $this->db->prepare("SELECT nombre FROM sifone_asociados WHERE cedula = ? LIMIT 1");
+            $st->execute([$cedula]);
+        }
+        $n = $st->fetchColumn();
+        return $n === false ? null : (string) $n;
     }
 
     public function actualizarCabecera(int $id, array $campos): void
@@ -384,6 +426,39 @@ private const DETALLE_COLS = [
         $st = $this->db->prepare("SELECT * FROM solicitudes_adjuntos WHERE id = ?");
         $st->execute([$adjId]);
         return $st->fetch() ?: null;
+    }
+
+    // ── Calificación de satisfacción ─────────────────────────────────────
+    /** Calificación de la solicitud (0 o 1 fila) o null. */
+    public function calificacion(int $solicitudId): ?array
+    {
+        $st = $this->db->prepare("SELECT * FROM solicitudes_calificaciones WHERE solicitud_id = ? LIMIT 1");
+        $st->execute([$solicitudId]);
+        return $st->fetch() ?: null;
+    }
+
+    /** Busca la calificación (y su solicitud) por token de acceso. */
+    public function calificacionPorToken(string $token): ?array
+    {
+        $st = $this->db->prepare(
+            "SELECT c.*, s.numero_radicado, s.tipo_codigo, s.estado_codigo, s.fase, s.cedula_solicitante
+               FROM solicitudes_calificaciones c
+               JOIN solicitudes s ON s.id = c.solicitud_id
+              WHERE c.token_acceso = ? LIMIT 1"
+        );
+        $st->execute([$token]);
+        return $st->fetch() ?: null;
+    }
+
+    /** Guarda la puntuación (1-5) y comentarios; marca fecha_calificacion. */
+    public function guardarCalificacion(int $solicitudId, int $puntuacion, ?string $comentarios): void
+    {
+        $st = $this->db->prepare(
+            "UPDATE solicitudes_calificaciones
+                SET puntuacion = ?, comentarios = ?, fecha_calificacion = NOW()
+              WHERE solicitud_id = ?"
+        );
+        $st->execute([$puntuacion, $comentarios, $solicitudId]);
     }
 
     /** Categorías de ticket (catálogo) activas. */

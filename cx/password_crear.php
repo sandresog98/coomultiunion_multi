@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/_env.php';
 if (PortalAuth::actor() !== null) {
-    header('Location: ' . $CX . '/index');
+    header('Location: ' . cx_url('inicio'));
     exit;
 }
 $prefill = trim((string) ($_GET['doc'] ?? ($_SESSION['cx_pending'] ?? '')));
@@ -44,7 +44,7 @@ $prefill = trim((string) ($_GET['doc'] ?? ($_SESSION['cx_pending'] ?? '')));
         <button type="submit" class="btn btn-portal-gradient" id="btnCrear"><i class="fa-solid fa-paper-plane me-1"></i> Enviar código</button>
       </form>
       <div class="auth-links text-center">
-        <a href="<?= $CX ?>/login"><i class="fa-solid fa-arrow-left me-1"></i>Volver al ingreso</a>
+        <a href="<?= cx_url('login') ?>"><i class="fa-solid fa-arrow-left me-1"></i>Volver al ingreso</a>
       </div>
     </div>
   </div>
@@ -65,7 +65,7 @@ document.getElementById('crearForm').addEventListener('submit',async function(e)
     msg.className='alert py-2 small alert-success';
     msg.textContent=(d.enviado===false?'No pudimos enviar el correo':'Enviamos un código de verificación a tu correo '+(d.correo||''))+'. Revisa tu bandeja e ingrésalo en el siguiente paso.';
     msg.classList.remove('d-none');
-    setTimeout(function(){ window.location=CX+'/password_verificar?doc='+encodeURIComponent(cedula); }, 1200);
+    setTimeout(function(){ window.location=<?= json_encode(cx_url('clave/verificar')) ?>+'?doc='+encodeURIComponent(cedula); }, 1200);
   }catch(err){ msg.className='alert py-2 small alert-danger'; msg.textContent='Error de conexión'; msg.classList.remove('d-none'); btn.disabled=false; }
 });
 </script>

@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_env.php';
+$__envClass = 'env-' . preg_replace('/[^a-z0-9_-]/i', '', app_env());
+$__envLabel = env_label();
 // Si ya está autenticado y entró aquí, va al inicio.
 if (PortalAuth::actor() !== null) {
-    header('Location: ' . $CX . '/index');
+    header('Location: ' . cx_url('inicio'));
     exit;
 }
 ?>
@@ -20,7 +22,7 @@ if (PortalAuth::actor() !== null) {
 <link rel="stylesheet" href="<?= $APP ?>/assets/css/front.css">
 <link rel="stylesheet" href="<?= $CX ?>/assets/cx.css">
 </head>
-<body class="portal">
+<body class="portal <?php echo $__envClass; ?>">
 <div class="portal-auth-screen">
   <div class="portal-shape s1"></div><div class="portal-shape s2"></div>
   <div class="card card-mobile">
@@ -28,6 +30,7 @@ if (PortalAuth::actor() !== null) {
       <div class="card-header-brand">
         <img src="<?= $APP ?>/assets/img/logo.png" alt="Multi Asociados">
         <div class="fw-semibold fs-5">Portal de asociados</div>
+        <?php if ($__envLabel !== ''): ?><span class="env-badge ms-auto"><?php echo $__envLabel; ?></span><?php endif; ?>
       </div>
     </div>
     <div class="form-section">
@@ -51,7 +54,7 @@ if (PortalAuth::actor() !== null) {
         <button type="submit" class="btn btn-portal-gradient" id="btnLogin"><i class="fa-solid fa-right-to-bracket me-1"></i> Ingresar</button>
       </form>
       <div class="auth-links text-center">
-        <a href="<?= $CX ?>/password_crear"><i class="fa-solid fa-user-plus me-1"></i>¿No tienes contraseña? Créala</a>
+        <a href="<?= cx_url('clave/crear') ?>"><i class="fa-solid fa-user-plus me-1"></i>¿No tienes contraseña? Créala</a>
       </div>
       <p class="text-center text-white-50 small mt-3 mb-0">Si es tu primer acceso, se te pedirá crear tu contraseña.</p>
       <div class="mt-3 d-flex justify-content-center">
@@ -77,8 +80,8 @@ document.getElementById('loginForm').addEventListener('submit',async function(e)
       body:JSON.stringify({cedula:document.getElementById('cedula').value.trim(),password:document.getElementById('password').value})});
     var j=await r.json();
     if(!j.ok){ msg.textContent=j.error||'Error'; msg.classList.remove('d-none'); btn.disabled=false; return; }
-    if(j.data && j.data.pending){ window.location=<?= json_encode($CX) ?>+'/password_crear'; return; }
-    window.location=<?= json_encode($CX) ?>+'/index';
+    if(j.data && j.data.pending){ window.location=<?= json_encode(cx_url('clave/crear')) ?>; return; }
+    window.location=<?= json_encode(cx_url('inicio')) ?>;
   }catch(err){ msg.textContent='Error de conexión'; msg.classList.remove('d-none'); btn.disabled=false; }
 });
 </script>

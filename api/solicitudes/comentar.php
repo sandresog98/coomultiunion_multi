@@ -1,8 +1,11 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
+require_once $root . '/core/solicitudes/AdjuntoArchivo.php';
 
-// POST /api/solicitudes/comentar.php   { id, mensaje }
+// POST /api/solicitudes/comentar.php
+//   JSON:      { id, mensaje }
+//   Multipart: { id, mensaje, files[] }  → comentario con uno o varios adjuntos.
 Http::requireMethod('POST');
 Idempotencia::begin('solicitudes');
 $in    = Http::input();
@@ -24,4 +27,18 @@ if ($actor['tipo'] === 'asociado') {
     Http::crud('solicitudes.gestion', 'comentar');
 }
 
-Http::ok($service->comentar($id, $actor, $mensaje));
+// Adjuntos opcionales (solo llegan por multipart). El personal interno requiere permiso de adjuntar.
+$adjuntos = [];
+if (!empty($_FILES['files'])) {
+    if (($actor['tipo'] ?? '') === 'interno') {
+        Http::crud('solicitudes.gestion', 'adjuntar');
+    }
+    foreach (AdjuntoArchivo::normalizar($_FILES['files']) as $f) {
+        $meta = AdjuntoArchivo::guardar($f, $id);
+        if ($meta !== null) {
+            $adjuntos[] = $meta;
+        }
+    }
+}
+
+Http::ok($service->comentar($id, $actor, $mensaje, $adjuntos));

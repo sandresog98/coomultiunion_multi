@@ -25,6 +25,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
         <span><i class="fas fa-box me-2"></i>Productos</span>
         <span class="d-flex gap-2 align-items-center">
           <span class="small text-white-50" id="infoP"></span>
+          <span id="fSizeP"></span>
           <?php if ($canCrear): ?>
           <button class="btn btn-light btn-sm" onclick="abrirProducto()"><i class="fas fa-plus me-1"></i>Nuevo producto</button>
           <?php endif; ?>
@@ -35,13 +36,13 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label>
             <input class="form-control" id="qP" placeholder="Nombre o descripción…"></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Categoría</label>
-            <select class="form-select" id="catP" style="width:170px"></select></div>
+            <select class="form-select" id="catP" data-searchable style="width:170px"></select></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Marca</label>
-            <select class="form-select" id="marP" style="width:170px"></select></div>
+            <select class="form-select" id="marP" data-searchable style="width:170px"></select></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-            <select class="form-select" id="estP" style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
+            <select class="form-select" id="estP" data-searchable style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Agotado</label>
-            <select class="form-select" id="agotP" style="width:140px"><option value="">Todos</option><option value="1">Agotados</option><option value="0">No agotados</option></select></div>
+            <select class="form-select" id="agotP" data-searchable style="width:140px"><option value="">Todos</option><option value="1">Agotados</option><option value="0">No agotados</option></select></div>
         </div>
         <div id="alertP" class="alert d-none"></div>
         <div class="table-responsive">
@@ -73,6 +74,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
         <span><i class="fas fa-tags me-2"></i>Categorías</span>
         <span class="d-flex gap-2 align-items-center">
           <span class="small text-white-50" id="infoC"></span>
+          <span id="fSizeC"></span>
           <?php if ($canCrear): ?>
           <button class="btn btn-light btn-sm" onclick="abrirCategoria()"><i class="fas fa-plus me-1"></i>Nueva</button>
           <?php endif; ?>
@@ -83,7 +85,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label>
             <input class="form-control" id="qC" placeholder="Nombre…"></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-            <select class="form-select" id="estC" style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
+            <select class="form-select" id="estC" data-searchable style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
         </div>
         <div id="alertC" class="alert d-none"></div>
         <div class="table-responsive">
@@ -104,6 +106,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
         <span><i class="fas fa-registered me-2"></i>Marcas</span>
         <span class="d-flex gap-2 align-items-center">
           <span class="small text-white-50" id="infoM"></span>
+          <span id="fSizeM"></span>
           <?php if ($canCrear): ?>
           <button class="btn btn-light btn-sm" onclick="abrirMarca()"><i class="fas fa-plus me-1"></i>Nueva</button>
           <?php endif; ?>
@@ -114,7 +117,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label>
             <input class="form-control" id="qM" placeholder="Nombre…"></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-            <select class="form-select" id="estM" style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
+            <select class="form-select" id="estM" data-searchable style="width:120px"><option value="">Todos</option><option value="1">Activo</option><option value="0">Inactivo</option></select></div>
         </div>
         <div id="alertM" class="alert d-none"></div>
         <div class="table-responsive">
@@ -196,10 +199,10 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['tienda.catalogo.editar']===true,CAN_ELIM=ACC['tienda.catalogo.eliminar']===true;
-const PAGE_SIZE=20, alertP=document.getElementById('alertP');
-let stP={q:'',cat:'',mar:'',est:'',agotado:'',page:0,order:'nombre',dir:'ASC'};
-let stC={q:'',est:'',page:0,order:'nombre',dir:'ASC'};
-let stM={q:'',est:'',page:0,order:'nombre',dir:'ASC'};
+const alertP=document.getElementById('alertP');
+let stP={q:'',cat:'',mar:'',est:'',agotado:'',page:0,size:20,order:'nombre',dir:'ASC'};
+let stC={q:'',est:'',page:0,size:20,order:'nombre',dir:'ASC'};
+let stM={q:'',est:'',page:0,size:20,order:'nombre',dir:'ASC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
@@ -225,7 +228,7 @@ function renderSortIcons(tab){
   });
 }
 function renderPagination(elId,total,s){
-  const el=document.getElementById(elId); const N=Math.ceil(total/PAGE_SIZE);
+  const el=document.getElementById(elId); const N=Math.ceil(total/s.size);
   if(N<=1){el.innerHTML='';return;}
   let pages=[]; const C=s.page;
   if(N<=10){for(let i=0;i<N;i++)pages.push(i);}
@@ -270,11 +273,11 @@ function cargarTab(tab){
   if(tab==='P')cargarP();else if(tab==='C')cargarC();else cargarM();
 }
 async function cargarP(){
-  const off=stP.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(stP.q)}&categoria_id=${stP.cat}&marca_id=${stP.mar}&estado=${stP.est}&agotado=${stP.agotado}&limit=${PAGE_SIZE}&offset=${off}&order=${stP.order}&dir=${stP.dir}`;
+  const off=stP.page*stP.size;
+  const p=`q=${encodeURIComponent(stP.q)}&categoria_id=${stP.cat}&marca_id=${stP.mar}&estado=${stP.est}&agotado=${stP.agotado}&limit=${stP.size}&offset=${off}&order=${stP.order}&dir=${stP.dir}`;
   try{
     const d=await api('tienda/catalogo.php?ent=productos&action=listar&'+p);
-    document.getElementById('infoP').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoP').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+stP.size,d.total)} de ${d.total}`:'';
     renderSortIcons('P');
     document.getElementById('tbodyP').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td>${a.foto_path?`<img src="${imgUrl(a.id,a.foto_path)}" class="thumb" onerror="this.style.visibility='hidden'">`:'<span class="text-muted">—</span>'}</td>
@@ -290,11 +293,11 @@ async function cargarP(){
   }catch(e){showA('alertP',e.message,false);}
 }
 async function cargarC(){
-  const off=stC.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(stC.q)}&estado=${stC.est}&limit=${PAGE_SIZE}&offset=${off}&order=${stC.order}&dir=${stC.dir}`;
+  const off=stC.page*stC.size;
+  const p=`q=${encodeURIComponent(stC.q)}&estado=${stC.est}&limit=${stC.size}&offset=${off}&order=${stC.order}&dir=${stC.dir}`;
   try{
     const d=await api('tienda/catalogo.php?ent=categorias&action=listar&'+p);
-    document.getElementById('infoC').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoC').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+stC.size,d.total)} de ${d.total}`:'';
     renderSortIcons('C');
     document.getElementById('tbodyC').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">${esc(a.nombre)}</td><td class="text-center">${a.total_productos}</td><td class="text-center">${estadoBadge(a.estado_activo)}</td>
@@ -305,11 +308,11 @@ async function cargarC(){
   }catch(e){showA('alertC',e.message,false);}
 }
 async function cargarM(){
-  const off=stM.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(stM.q)}&estado=${stM.est}&limit=${PAGE_SIZE}&offset=${off}&order=${stM.order}&dir=${stM.dir}`;
+  const off=stM.page*stM.size;
+  const p=`q=${encodeURIComponent(stM.q)}&estado=${stM.est}&limit=${stM.size}&offset=${off}&order=${stM.order}&dir=${stM.dir}`;
   try{
     const d=await api('tienda/catalogo.php?ent=marcas&action=listar&'+p);
-    document.getElementById('infoM').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoM').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+stM.size,d.total)} de ${d.total}`:'';
     renderSortIcons('M');
     document.getElementById('tbodyM').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">${esc(a.nombre)}</td><td class="text-center">${a.total_productos}</td><td class="text-center">${estadoBadge(a.estado_activo)}</td>
@@ -374,6 +377,9 @@ async function eliminar(ent,id){
   catch(e){showA('alertP',e.message,false);}
 }
 
+window.Listado.mountSize('fSizeP', stP, function(){cargarTab('P');}, {id:'fSizeP'});
+window.Listado.mountSize('fSizeC', stC, function(){cargarTab('C');}, {id:'fSizeC'});
+window.Listado.mountSize('fSizeM', stM, function(){cargarTab('M');}, {id:'fSizeM'});
 cargarTab('P');
 
 // Cargar Categorías/Marcas al activar su tab

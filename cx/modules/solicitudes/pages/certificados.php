@@ -29,7 +29,7 @@ function enviar(){
 function listar(){
   fetch(PAPI+'/listar.php?tipo=certificado&limit=50').then(r=>r.json()).then(j=>{
     var rows=(j.data&&j.data.rows)||[];
-    document.getElementById('list').innerHTML=rows.length?rows.map(s=>'<div class="d-flex justify-content-between border-bottom py-1"><span>'+esc(s.numero_radicado)+' · '+esc(s.estado_codigo)+'</span><a class="btn btn-sm btn-portal-outline" href="'+CX_BASE+'/modules/solicitudes/pages/detalle?id='+s.id+'">Ver</a></div>').join(''):'<span class="text-muted">Sin solicitudes</span>';
+    document.getElementById('list').innerHTML=rows.length?rows.map(s=>'<div class="d-flex justify-content-between border-bottom py-1"><span>'+esc(s.numero_radicado)+' · '+esc(s.estado_codigo)+'</span><a class="btn btn-sm btn-portal-outline" href="'+cxUrl('solicitudes/{id}',{id:s.id})+'">Ver</a></div>').join(''):'<span class="text-muted">Sin solicitudes</span>';
   }).catch(function(){document.getElementById('list').textContent='—';});
 }
 listar();

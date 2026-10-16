@@ -10,7 +10,10 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-credit-card me-2"></i>Pagos PSE</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
   </div>
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
@@ -21,9 +24,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <input class="form-control" id="q" placeholder="PSE ID, cédula o nombre…">
         </div>
       </div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" style="width:140px"><option value="">Todos</option><option value="Aprobada">Aprobada</option><option value="Rechazada">Rechazada</option></select></div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Conciliado</label><select class="form-select" id="fConciliado" style="width:145px"><option value="">Todos</option><option value="1">Conciliados</option><option value="0">Sin conciliar</option></select></div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" data-searchable style="width:140px"><option value="">Todos</option><option value="Aprobada">Aprobada</option><option value="Rechazada">Rechazada</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Conciliado</label><select class="form-select" id="fConciliado" data-searchable style="width:145px"><option value="">Todos</option><option value="1">Conciliados</option><option value="0">Sin conciliar</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" data-searchable style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label><input type="date" class="form-control" id="fDesde" style="width:140px"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Hasta</label><input type="date" class="form-control" id="fHasta" style="width:140px"></div>
     </div>
@@ -64,8 +67,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 
 <script>
-const API=<?php echo json_encode(apiUrl()); ?>,PAGE_SIZE=20,alertBox=document.getElementById('alert');
-let state={q:'',estado:'',conciliado:'',asignacion:'',desde:'',hasta:'',page:0,order:'fecha_resolucion',dir:'DESC'};
+const API=<?php echo json_encode(apiUrl()); ?>,alertBox=document.getElementById('alert');
+let state={q:'',estado:'',conciliado:'',asignacion:'',desde:'',hasta:'',page:0,size:20,order:'fecha_resolucion',dir:'DESC'};
 let mConciliar,mConfiarDetalle,debounceTimer;
 let confiarData={};
 
@@ -82,12 +85,12 @@ document.getElementById('q').addEventListener('input',()=>{clearTimeout(debounce
 ['fDesde','fHasta'].forEach(id=>document.getElementById(id).addEventListener('change',function(){state[id.substring(1)]=this.value;state.page=0;cargar();}));
 
 async function cargar(){
-  let o=state.page*PAGE_SIZE,bs='';
+  let o=state.page*state.size,bs='';
   if(state.q)bs+='&q='+encodeURIComponent(state.q);if(state.estado)bs+='&estado='+state.estado;
   if(state.conciliado)bs+='&conciliado='+state.conciliado;if(state.asignacion)bs+='&asignacion='+state.asignacion;if(state.desde)bs+='&fecha_desde='+state.desde;if(state.hasta)bs+='&fecha_hasta='+state.hasta;
   try{
-    let d=await apicall(`pagos/listar?tipo=pse&limit=${PAGE_SIZE}&offset=${o}&order=${state.order}&dir=${state.dir}${bs}`);
-    let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+PAGE_SIZE,t)} de ${t}`:'';renderSortIcons();
+    let d=await apicall(`pagos/listar?tipo=pse&limit=${state.size}&offset=${o}&order=${state.order}&dir=${state.dir}${bs}`);
+    let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+state.size,t)} de ${t}`:'';renderSortIcons();
     confiarData={};
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       let acc='';if(r.conciliado_confiar){acc=`<button class="btn btn-sm btn-outline-danger" onclick="desconciliar('${esc(r.pse_id)}','${esc(r.conciliado_confiar)}')" title="Desasignar"><i class="fas fa-unlink"></i></button>`;
@@ -99,7 +102,7 @@ async function cargar(){
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
 
-function renderPagination(t){let N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}let C=state.page,pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);pages.forEach(p=>{if(p==='...')h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});if(C<N-1)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C+1})">»</a></li>`);document.getElementById('paginacion').innerHTML=`<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;}
+function renderPagination(t){let N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}let C=state.page,pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);pages.forEach(p=>{if(p==='...')h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});if(C<N-1)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C+1})">»</a></li>`);document.getElementById('paginacion').innerHTML=`<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;}
 function goPage(p){state.page=p;cargar();}
 
 function abrirConciliar(id){document.getElementById('cc_pse_id').value=id;document.getElementById('cc_confiar_id').value='';document.getElementById('cc_confiar_input').value='';document.getElementById('cc_confiar_res').innerHTML='';mConciliar.show();}
@@ -126,6 +129,6 @@ async function desconciliar(p,c){if(!confirm('¿Desasignar conciliación?'))retu
 
 function verConfiarDetalle(pseId){let d=confiarData[pseId];if(!d){alert('Sin datos');return;}let h=`<h6 class="text-brand mb-2">${esc(pseId)}</h6><hr><div class="row small"><div class="col-md-6 mb-1"><strong>Fecha:</strong> ${fmtD(d.fecha)}</div><div class="col-md-6 mb-1"><strong>Documento:</strong> ${esc(d.documento)}</div><div class="col-md-6 mb-1"><strong>Oficina:</strong> ${esc(d.oficina)}</div><div class="col-md-6 mb-1"><strong>Tipo:</strong> ${esc(d.tipo_transaccion)}</div><div class="col-md-6 mb-1"><strong>Valor consignación:</strong> ${money(d.valor_consignacion)}</div><div class="col-md-6 mb-1"><strong>Valor retiro:</strong> ${money(d.valor_retiro)}</div><div class="col-md-6 mb-1"><strong>Saldo:</strong> ${money(d.saldo)}</div></div><div class="mt-2"><strong>Descripción:</strong><br><span class="small">${esc(d.descripcion)}</span></div>`;document.getElementById('confiarDetalleContent').innerHTML=h;mConfiarDetalle.show();}
 
-document.addEventListener('DOMContentLoaded',()=>{mConciliar=new bootstrap.Modal('#mConciliar');mConfiarDetalle=new bootstrap.Modal('#mConfiarDetalle');setupConfiarAuto();cargar();});
+document.addEventListener('DOMContentLoaded',()=>{mConciliar=new bootstrap.Modal('#mConciliar');mConfiarDetalle=new bootstrap.Modal('#mConfiarDetalle');setupConfiarAuto();window.Listado.mountSize('fSizeBox', state, cargar);cargar();});
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

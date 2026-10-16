@@ -10,13 +10,16 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-building-columns me-2"></i>Pagos Confiar</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
   </div>
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label><div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input class="form-control" id="q" placeholder="CONF ID, cédula o descripción…"></div></div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" style="width:140px"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="asignado">Asignado</option><option value="no_valido">No válido</option></select></div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" data-searchable style="width:140px"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="asignado">Asignado</option><option value="no_valido">No válido</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" data-searchable style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label><input type="date" class="form-control" id="fDesde" style="width:140px"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Hasta</label><input type="date" class="form-control" id="fHasta" style="width:140px"></div>
     </div>
@@ -63,8 +66,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 
 <script>
-const API=<?php echo json_encode(apiUrl()); ?>,PAGE_SIZE=20,alertBox=document.getElementById('alert');
-let state={q:'',estado:'',asignacion:'',desde:'',hasta:'',page:0,order:'fecha',dir:'DESC'};
+const API=<?php echo json_encode(apiUrl()); ?>,alertBox=document.getElementById('alert');
+let state={q:'',estado:'',asignacion:'',desde:'',hasta:'',page:0,size:20,order:'fecha',dir:'DESC'};
 let mConfirmar,mRechazar,debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -80,12 +83,12 @@ document.getElementById('fAsignacion').addEventListener('change',function(){stat
 ['fDesde','fHasta'].forEach(id=>document.getElementById(id).addEventListener('change',function(){state[id.substring(1)]=this.value;state.page=0;cargar();}));
 
 async function cargar(){
-  let o=state.page*PAGE_SIZE,bs='';
+  let o=state.page*state.size,bs='';
   if(state.q)bs+='&q='+encodeURIComponent(state.q);if(state.estado)bs+='&estado='+state.estado;
   if(state.asignacion)bs+='&asignacion='+state.asignacion;if(state.desde)bs+='&fecha_desde='+state.desde;if(state.hasta)bs+='&fecha_hasta='+state.hasta;
   try{
-    let d=await apicall(`pagos/listar?tipo=confiar&limit=${PAGE_SIZE}&offset=${o}&order=${state.order}&dir=${state.dir}${bs}`);
-    let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+PAGE_SIZE,t)} de ${t}`:'';renderSortIcons();
+    let d=await apicall(`pagos/listar?tipo=confiar&limit=${state.size}&offset=${o}&order=${state.order}&dir=${state.dir}${bs}`);
+    let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+state.size,t)} de ${t}`:'';renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       let est=r.confirmacion_estado||'pendiente',acc='';
       if(est==='asignado')acc=`<button class="btn btn-sm btn-outline-warning" onclick="desasignarConfiar('${esc(r.confiar_id)}')" title="Desasignar"><i class="fas fa-undo"></i></button>`;
@@ -97,7 +100,7 @@ async function cargar(){
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
 
-function renderPagination(t){let N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}let C=state.page,pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);pages.forEach(p=>{if(p==='...')h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});if(C<N-1)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C+1})">»</a></li>`);document.getElementById('paginacion').innerHTML=`<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;}
+function renderPagination(t){let N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}let C=state.page,pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);pages.forEach(p=>{if(p==='...')h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});if(C<N-1)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C+1})">»</a></li>`);document.getElementById('paginacion').innerHTML=`<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;}
 function goPage(p){state.page=p;cargar();}
 
 function abrirConfirmar(id){document.getElementById('cf_confiar_id').value=id;document.getElementById('cf_cedula').value='';document.getElementById('cf_cedula_input').value='';document.getElementById('cf_cedula_res').innerHTML='';document.getElementById('cf_comentario').value='';document.getElementById('cf_archivo').value='';document.getElementById('cf_upload_status').textContent='';document.getElementById('cf_btn').disabled=false;mConfirmar.show();}
@@ -124,6 +127,6 @@ function abrirRechazar(id){document.getElementById('rj_confiar_id').value=id;doc
 async function guardarRechazo(e){e.preventDefault();let d={confiar_id:document.getElementById('rj_confiar_id').value,motivo:document.getElementById('rj_motivo').value.trim()};if(!d.motivo){alert('Ingrese un motivo');return;}try{await apicall('pagos/confirmar',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});mRechazar.hide();cargar();}catch(e){alert(e.message);}}
 async function desasignarConfiar(id){if(!confirm('¿Revertir este pago? Volverá a estado pendiente.'))return;try{await apicall('pagos/confirmar',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confiar_id:id,desasignar:true})});cargar();}catch(e){alert(e.message);}}
 
-document.addEventListener('DOMContentLoaded',()=>{mConfirmar=new bootstrap.Modal('#mConfirmar');mRechazar=new bootstrap.Modal('#mRechazar');setupAsociadoAuto();cargar();});
+document.addEventListener('DOMContentLoaded',()=>{mConfirmar=new bootstrap.Modal('#mConfirmar');mRechazar=new bootstrap.Modal('#mRechazar');setupAsociadoAuto();window.Listado.mountSize('fSizeBox', state, cargar);cargar();});
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

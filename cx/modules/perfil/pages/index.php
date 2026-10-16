@@ -10,11 +10,18 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
     <div class="portal-card portal-card-glowing-border">
       <div class="card-header-brand mb-3">
         <i class="fa-solid fa-user fa-lg"></i>
-        <div><div class="fw-semibold">Datos personales</div><div class="crumb">Actualización de datos por solicitud (B7) — pendiente</div></div>
+        <div><div class="fw-semibold">Datos personales</div><div class="crumb">Actualización de datos por solicitud (B7)</div></div>
       </div>
       <div id="perfilBox" class="text-center text-muted py-4">Cargando…</div>
       <div class="portal-datos-grid d-none" id="datosGrid"></div>
     </div>
+  </div>
+  <div class="col-12 col-sm-6 col-md-4">
+    <a class="portal-card portal-card-glowing-border text-decoration-none text-dark portal-mini d-block h-100" href="<?= cx_url('solicitudes/actualizar-info') ?>">
+      <div class="mini-icon"><i class="fa-solid fa-user-pen"></i></div>
+      <h6>Actualizar info</h6>
+      <div class="small text-muted">Actualiza tus datos</div>
+    </a>
   </div>
 </div>
 <script>

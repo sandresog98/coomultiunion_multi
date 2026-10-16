@@ -14,7 +14,8 @@ Sistema de gestión de una **cooperativa financiera** (PHP 8.2 / MariaDB 11.8, s
 | Lógica de negocio | `core/` | servicios reutilizables (API-first) |
 
 > La política de migración y conservación de datos históricos está en
-> [`migracion_datos.md`](./migracion_datos.md). Es el único otro documento del proyecto.
+> [`migracion_datos.md`](./migracion_datos.md) y el cronograma de salida en vivo (cutover
+> v1 → v2) en [`plan_migracion_v1_a_v2.md`](./plan_migracion_v1_a_v2.md).
 
 ---
 
@@ -110,6 +111,10 @@ Con Apache de XAMPP (URLs limpias vía `.htaccess`, sin `.php`):
 - Tienda: `http://localhost/projects/multi/multi/tienda/`
 - Convenios: `http://localhost/projects/multi/multi/convenios/`
 - Simulador: `http://localhost/projects/multi/multi/simulador/`
+
+El portal CX usa URLs amigables (tabla única en `cx/routes.php`), por ejemplo
+`/cx/aportes`, `/cx/solicitudes/mis`, `/cx/solicitar-credito`. Las rutas largas
+antiguas (`/cx/modules/.../pages/...`) siguen funcionando sin cambios.
 
 O con el servidor embebido (sin Apache):
 

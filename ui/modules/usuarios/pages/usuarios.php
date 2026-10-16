@@ -32,8 +32,9 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
           <input class="form-control" id="q" placeholder="Usuario o nombre…">
         </div>
       </div>
-      <div class="col-auto ms-auto">
+      <div class="col-auto ms-auto d-flex align-items-center gap-2">
         <span class="small text-muted" id="infoTotal"></span>
+        <span id="fSizeBox"></span>
       </div>
     </div>
     <div id="alert" class="alert d-none"></div>
@@ -100,8 +101,7 @@ const API = <?php echo json_encode(apiUrl()); ?>;
 const ACC = <?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['usuarios.editar']===true,CAN_RESET=ACC['usuarios.resetear']===true,CAN_ELIM=ACC['usuarios.eliminar']===true;
 const alertBox = document.getElementById('alert');
-const PAGE_SIZE = 20;
-let state = { q: '', page: 0 };
+let state = { q: '', page: 0, size: 20 };
 let debounceTimer;
 let modalUser, modalPass;
 
@@ -109,12 +109,12 @@ function showAlert(msg, ok=false){ alertBox.className='alert alert-'+(ok?'succes
 async function api(path, opt){ const r=await fetch(API+path, opt); const j=await r.json(); if(!j.ok) throw new Error(j.error||'Error'); return j.data; }
 
 async function cargar(){
-  const off = state.page * PAGE_SIZE;
-  const qs = `q=${encodeURIComponent(state.q)}&limit=${PAGE_SIZE}&offset=${off}`;
+  const off = state.page * state.size;
+  const qs = `q=${encodeURIComponent(state.q)}&limit=${state.size}&offset=${off}`;
   try{
     const d = await api('usuarios/listar?'+qs);
     const total = d.total || 0;
-    document.getElementById('infoTotal').textContent = total > 0 ? `Mostrando ${off+1}-${Math.min(off+PAGE_SIZE, total)} de ${total}` : '';
+    document.getElementById('infoTotal').textContent = total > 0 ? `Mostrando ${off+1}-${Math.min(off+state.size, total)} de ${total}` : '';
     const rows = d.rows || [];
     document.getElementById('tbody').innerHTML = rows.map(u => `
       <tr>
@@ -131,7 +131,7 @@ async function cargar(){
   }catch(e){ showAlert(e.message); }
 }
 function renderPagination(total){
-  const N = Math.ceil(total / PAGE_SIZE);
+  const N = Math.ceil(total / state.size);
   const nav = document.getElementById('paginacion');
   if (N <= 1) { nav.innerHTML = ''; return; }
   const C = state.page;
@@ -213,7 +213,9 @@ async function eliminar(id){
   }catch(e){ showAlert(e.message); }
 }
 document.addEventListener('DOMContentLoaded',()=>{
-  modalUser=new bootstrap.Modal('#modalUser'); modalPass=new bootstrap.Modal('#modalPass'); cargar();
+  modalUser=new bootstrap.Modal('#modalUser'); modalPass=new bootstrap.Modal('#modalPass');
+  window.Listado.mountSize('fSizeBox', state, cargar, {class:'small text-muted'});
+  cargar();
 });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

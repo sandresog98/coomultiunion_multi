@@ -263,8 +263,8 @@ final class SolicitudService
                 error_log('[solicitudes-efecto] ' . $e->getMessage());
             }
         }
-        // Token de calificación al resolver positivamente (tipos que lo ofrecen).
-        if ($fase === 'RESUELTA_POSITIVA' && !in_array($s['tipo_codigo'], ['ticket', 'certificado'], true)) {
+        // Token de calificación al resolver (positiva o negativa), tipos que lo ofrecen.
+        if (in_array($fase, ['RESUELTA_POSITIVA', 'RESUELTA_NEGATIVA'], true) && !in_array($s['tipo_codigo'], ['ticket', 'certificado'], true)) {
             $this->generarCalificacion($s);
         }
         Logger::log(
@@ -279,32 +279,55 @@ final class SolicitudService
         return $this->detalle($id);
     }
 
-    public function comentar(int $id, array $actor, string $mensaje, ?string $ruta = null): array
+    public function comentar(int $id, array $actor, string $mensaje, array $adjuntos = []): array
     {
         $s = $this->repo->cabecera($id);
         if (!$s) {
             throw new DomainException('Solicitud no encontrada.');
         }
+        // Cerrada la conversación: cuando la solicitud está resuelta o anulada no se admiten más comentarios.
+        if (in_array((string) $s['fase'], ['RESUELTA_POSITIVA', 'RESUELTA_NEGATIVA', 'ANULADA'], true)) {
+            throw new DomainException('La solicitud ya fue respondida; no admite más comentarios.');
+        }
         if (trim($mensaje) === '') {
             throw new DomainException('El comentario no puede estar vacío.');
         }
+        $actorId = (string) ($actor['id'] ?? '');
         $tipoCom = ($actor['tipo'] ?? 'interno') === 'asociado' ? 'solicitante' : 'interno';
-        $comId = $this->repo->comentario($id, $tipoCom, (string) ($actor['id'] ?? ''), $mensaje, $ruta);
-        $this->repo->evento($id, [
-            'tipo_evento' => 'comentario',
-            'actor_tipo'  => $actor['tipo'] ?? 'interno',
-            'actor_id'    => (string) ($actor['id'] ?? ''),
-            'mensaje'     => $mensaje,
-        ]);
-        // Adjunto a un comentario (ruta opcional) se registra como adjunto contexto=comentario.
-        if ($ruta !== null && $ruta !== '') {
-            $this->repo->insertarAdjunto($id, [
-                'contexto' => 'comentario', 'tipo' => 'imagen', 'nombre_original' => basename($ruta),
-                'nombre_archivo' => basename($ruta), 'ruta_archivo' => $ruta,
-                'subido_por' => (string) ($actor['id'] ?? ''),
+
+        $pdo = $this->repo->pdo();
+        $pdo->beginTransaction();
+        try {
+            $this->repo->comentario($id, $tipoCom, $actorId, $mensaje, null);
+            // Evento del comentario: su id liga los adjuntos de este comentario.
+            $eventoId = $this->repo->evento($id, [
+                'tipo_evento' => 'comentario',
+                'actor_tipo'  => $actor['tipo'] ?? 'interno',
+                'actor_id'    => $actorId,
+                'mensaje'     => $mensaje,
             ]);
+            foreach ($adjuntos as $a) {
+                if (empty($a['ruta_archivo'])) {
+                    continue;
+                }
+                $this->repo->insertarAdjunto($id, [
+                    'contexto'        => 'comentario',
+                    'tipo'            => $a['tipo'] ?? 'imagen',
+                    'tipo_documento'  => $a['tipo_documento'] ?? null,
+                    'nombre_original' => $a['nombre_original'] ?? null,
+                    'nombre_archivo'  => $a['nombre_archivo'] ?? null,
+                    'ruta_archivo'    => $a['ruta_archivo'],
+                    'tamano_archivo'  => $a['tamano_archivo'] ?? null,
+                    'tipo_mime'       => $a['tipo_mime'] ?? null,
+                    'subido_por'      => $actorId,
+                ], $eventoId);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
         }
-        Logger::log('comentar', 'solicitudes', (string) ($actor['id'] ?? null), "Comentario en solicitud #$id");
+        Logger::log('comentar', 'solicitudes', $actorId ?: null, "Comentario en solicitud #$id");
         return $this->detalle($id);
     }
 
@@ -369,6 +392,10 @@ final class SolicitudService
         if (!$s) {
             throw new DomainException('Solicitud no encontrada.');
         }
+        $s['solicitante_nombre'] = $this->repo->nombreSolicitante(
+            (string) $s['cedula_solicitante'],
+            (string) ($s['solicitante_tipo'] ?? 'asociado')
+        );
         $tipo = $this->repo->tipo($s['tipo_codigo']);
         $detalle = $tipo && $tipo['detalle_tabla']
             ? $this->repo->detalle($tipo['detalle_tabla'], $id)
@@ -393,12 +420,90 @@ final class SolicitudService
             'adjuntos'     => $this->repo->adjuntos($id),
             'transiciones' => $this->maquina->disponibles($s['tipo_codigo'], $s['estado_codigo']),
             'elegibilidad' => $elegibilidad,
+            'calificacion' => $this->repo->calificacion($id),
         ];
+    }
+
+    /**
+     * Registra la calificación de satisfacción (estrellas 1-5) del asociado.
+     * Se permite cuando la solicitud está RESUELTA (positiva o negativa).
+     * Si se pasa $token, autoriza por token en vez de por sesión.
+     */
+    public function calificar(int $id, array $data, ?string $token = null, ?string $cedula = null): array
+    {
+        $s = $this->repo->cabecera($id);
+        if (!$s) {
+            throw new DomainException('Solicitud no encontrada.');
+        }
+        if (!in_array((string) $s['fase'], ['RESUELTA_POSITIVA', 'RESUELTA_NEGATIVA'], true)) {
+            throw new DomainException('Solo se puede calificar una solicitud resuelta.');
+        }
+        $existe = $this->repo->calificacion($id);
+        if ($existe && $existe['puntuacion'] !== null) {
+            throw new DomainException('Esta solicitud ya fue calificada.');
+        }
+        if ($token !== null) {
+            $cal = $this->repo->calificacionPorToken($token);
+            if (!$cal || (int) $cal['solicitud_id'] !== $id) {
+                throw new DomainException('Enlace de calificación inválido.', 403);
+            }
+        } elseif ($cedula !== null && $cedula !== '' ) {
+            if ((string) $s['cedula_solicitante'] !== $cedula) {
+                throw new DomainException('No autorizado', 403);
+            }
+        } else {
+            throw new DomainException('No autorizado', 403);
+        }
+
+        $puntuacion = (int) ($data['puntuacion'] ?? 0);
+        if ($puntuacion < 1 || $puntuacion > 5) {
+            throw new DomainException('La puntuación debe estar entre 1 y 5.');
+        }
+        $comentarios = trim((string) ($data['comentarios'] ?? ''));
+        $this->repo->guardarCalificacion($id, $puntuacion, $comentarios !== '' ? $comentarios : null);
+        Logger::log('calificar', 'solicitudes', $cedula ?? ('token:' . substr((string) $token, 0, 8)), "Calificación #$id = $puntuacion/5");
+        return $this->detalle($id);
+    }
+
+    /** Info de una calificación por token (para la página pública de calificación). */
+    public function porToken(string $token): array
+    {
+        $cal = $this->repo->calificacionPorToken($token);
+        if (!$cal) {
+            throw new DomainException('Enlace de calificación inválido.', 404);
+        }
+        return [
+            'id'                 => (int) $cal['solicitud_id'],
+            'numero_radicado'    => $cal['numero_radicado'],
+            'tipo_codigo'        => $cal['tipo_codigo'],
+            'estado_codigo'      => $cal['estado_codigo'],
+            'puntuacion'         => $cal['puntuacion'],
+            'comentarios'        => $cal['comentarios'],
+            'fecha_calificacion' => $cal['fecha_calificacion'],
+        ];
+    }
+
+    /** Registra la calificación a partir del token (enlace por correo, sin sesión). */
+    public function calificarPorToken(string $token, array $data): array
+    {
+        $cal = $this->repo->calificacionPorToken($token);
+        if (!$cal) {
+            throw new DomainException('Enlace de calificación inválido.', 403);
+        }
+        return $this->calificar((int) $cal['solicitud_id'], $data, $token);
+    }
+
+    /** ¿El asociado ya tiene una solicitud pendiente de ese tipo? (autobloqueo) */
+    public function tienePendiente(string $tipoCodigo, string $cedula): bool
+    {
+        return $this->repo->tienePendiente($tipoCodigo, $cedula);
     }
 
     public function listar(array $filtros, int $limit = 50, int $offset = 0): array
     {
-        return $this->repo->listar($filtros, $limit, $offset);
+        $res = $this->repo->listar($filtros, $limit, $offset);
+        $res['por_tipo'] = $this->repo->contarPorTipo($filtros);
+        return $res;
     }
 
     // ---------- Config (para formularios / UI, sin exponer secretos) ----------

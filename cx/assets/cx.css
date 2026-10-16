@@ -139,8 +139,11 @@ body.portal-drawer-open .portal-drawer-overlay{opacity:1; visibility:visible;}
 
 /* ----- mini-cards ocio (index) ----- */
 .portal-mini{text-align:center; padding:1.5rem 1rem;}
-.portal-mini .mini-icon{width:56px; height:56px; margin-inline:auto; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:1.5rem; background:linear-gradient(-75deg,#11458B,#1384D2); color:#fff; box-shadow:0 6px 16px rgba(17,69,139,.35);}
+.mini-icon{width:56px; height:56px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:1.5rem; background:linear-gradient(-75deg,#11458B,#1384D2); color:#fff; box-shadow:0 6px 16px rgba(17,69,139,.35);}
+.portal-mini .mini-icon{margin-inline:auto;}
 .portal-mini h6{margin-top:.8rem; font-weight:600;}
+.mini-icon.mini-icon-sm{width:38px; height:38px; font-size:1rem; box-shadow:0 4px 10px rgba(17,69,139,.28);}
+a:hover > .mini-icon-sm{transform:translateY(-1px); filter:brightness(1.06);}
 
 /* ----- Detalle grid ----- */
 .portal-datos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1rem;}
@@ -178,3 +181,18 @@ body.portal-drawer-open .portal-drawer-overlay{opacity:1; visibility:visible;}
 /* Los inputs custom dentro de un input-group deben crecer en línea (ojo a la derecha) */
 .input-group > .portal-input{flex:1 1 auto; width:1%;}
 .input-group > .input-group-text{border-radius:.6rem 0 0 .6rem;}
+
+/* ── Señal de entorno (APP_ENV) ───────────────────────────────────
+   El portal NO pinta el sidebar; cambia el color del topbar (y del
+   login) y muestra el badge de entorno. Producción no cambia. */
+body.env-test .portal-topbar{ background:linear-gradient(135deg,#7a0f10,#E92E2F); }
+body.env-local .portal-topbar{ background:linear-gradient(135deg,#000000,#2b2b2b); }
+body.env-test .portal-auth-screen{ background:radial-gradient(150% 180% at 20% 120%,#5c0a0b 0%,#8f1416 35%,#E92E2F 60%,#c12628 85%,#5c0a0b 100%); }
+body.env-local .portal-auth-screen{ background:radial-gradient(150% 180% at 20% 120%,#000000 0%,#111111 35%,#2b2b2b 60%,#1a1a1a 85%,#000000 100%); }
+
+.env-badge{
+  display:inline-block; padding:.15rem .5rem; font-size:.68rem; font-weight:700;
+  letter-spacing:.04em; line-height:1.1; color:#fff; background:#E92E2F;
+  border-radius:9999px; vertical-align:middle;
+}
+body.env-local .env-badge{background:#000000;}

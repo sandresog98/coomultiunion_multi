@@ -9,6 +9,9 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
 
+// Base de la app (robusto en subdirectorio): /proyecto/multi/multi
+$appBase = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+
 // Nodos del hub: [url, label, desc, icono(emoji), color]
 $apps = [
     ['url' => 'ui/login',          'label' => 'Panel de administración', 'desc' => 'Oficina, cobranza, créditos, tienda, convenios, sistema.', 'icon' => '🏢', 'color' => '#11468A'],
@@ -25,6 +28,7 @@ $apps = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Multi App v2</title>
+<link rel="icon" href="<?= $appBase ?>/assets/favicons/favicon.ico" sizes="any">
 <style>
   :root{ --b:#11468A; --a:#1882CD; --y:#FCD329; --r:#EB3031; }
   *{ box-sizing:border-box; margin:0; padding:0; }

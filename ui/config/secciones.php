@@ -50,6 +50,7 @@ return [
             'cobranza',
             'usuarios.gestion',
             'logs.gestion',
+            'configuracion',
             'sistema.mantenimiento',
             'convenios.admin',
             'convenios.boletas',
@@ -384,6 +385,10 @@ return [
             'usuarios.editar'       => true,
             'usuarios.eliminar'     => true,
             'usuarios.resetear'     => true,
+            // Reasignar (≠ asignación inicial): solo liderazgo o el responsable asignado.
+            'solicitudes.gestion.reasignar' => true,
+            // Parámetros configurables (crédito cooperativa de boletas, etc.).
+            'configuracion.editar' => true,
         ],
         'oficina' => [
             'asociados.detalle.toggle'              => true,
@@ -961,6 +966,15 @@ return [
                 'crear'    => 'Nuevo tipo',
                 'editar'   => 'Editar tipo',
                 'toggle'   => 'Activar / inactivar',
+            ],
+        ],
+        'configuracion' => [
+            'label'  => 'Parámetros de solicitudes',
+            'modulo' => 'configuracion',
+            'strict' => true,
+            'secciones' => [
+                'lista'  => 'Ver parámetros',
+                'editar' => 'Guardar cambios',
             ],
         ],
         'cobranza_tipos' => [

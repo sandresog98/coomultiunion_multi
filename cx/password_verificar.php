@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/_env.php';
 if (PortalAuth::actor() !== null) {
-    header('Location: ' . $CX . '/index');
+    header('Location: ' . cx_url('inicio'));
     exit;
 }
 $doc = trim((string) ($_GET['doc'] ?? ''));
@@ -67,7 +67,7 @@ $doc = trim((string) ($_GET['doc'] ?? ''));
         <button type="submit" class="btn btn-portal-gradient" id="btnVer"><i class="fa-solid fa-check me-1"></i> Guardar contraseña</button>
       </form>
       <div class="auth-links text-center">
-        <a href="<?= $CX ?>/password_crear"><i class="fa-solid fa-arrow-left me-1"></i>Volver y reenviar código</a>
+        <a href="<?= cx_url('clave/crear') ?>"><i class="fa-solid fa-arrow-left me-1"></i>Volver y reenviar código</a>
       </div>
     </div>
   </div>
@@ -88,7 +88,7 @@ document.getElementById('verForm').addEventListener('submit',async function(e){
     var j=await r.json();
     if(!j.ok){ msg.className='alert py-2 small alert-danger'; msg.textContent=j.error||'Error'; msg.classList.remove('d-none'); btn.disabled=false; return; }
     msg.className='alert py-2 small alert-success'; msg.textContent='Contraseña guardada correctamente.'; msg.classList.remove('d-none');
-    setTimeout(function(){ window.location=CX+'/login?success=1'; }, 900);
+    setTimeout(function(){ window.location=<?= json_encode(cx_url('login')) ?>+'?success=1'; }, 900);
   }catch(err){ msg.className='alert py-2 small alert-danger'; msg.textContent='Error de conexión'; msg.classList.remove('d-none'); btn.disabled=false; }
 });
 </script>

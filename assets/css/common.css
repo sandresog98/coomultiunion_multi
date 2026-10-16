@@ -7,7 +7,33 @@
   --brand-yellow: #FCD329;
   --brand-red: #EB3031;
   --brand-bg: #f4f6f9;
+  /* Color del sidebar según entorno (ver body.env-* abajo). Producción = azul. */
+  --sidebar-bg: var(--brand-blue-dark);
 }
+
+/* ── Señal de entorno ────────────────────────────────────────────
+   APP_ENV=local → sidebar negro · APP_ENV=test → sidebar rojo.
+   Producción conserva el azul corporativo (--brand-blue-dark). */
+body.env-local { --sidebar-bg: #000000; }
+body.env-test  { --sidebar-bg: #E92E2F; }
+
+.env-badge {
+  display: inline-block;
+  padding: .15rem .5rem;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  color: #fff;
+  background: #E92E2F;
+  border-radius: 9999px;
+  vertical-align: middle;
+}
+body.env-local .env-badge { background: #000000; }
+
+/* Login staff (body.brand-gradient): mismo criterio que el login del portal (cx). */
+body.env-test.brand-gradient  { background: radial-gradient(150% 180% at 20% 120%, #5c0a0b 0%, #8f1416 35%, #E92E2F 60%, #c12628 85%, #5c0a0b 100%); }
+body.env-local.brand-gradient { background: radial-gradient(150% 180% at 20% 120%, #000000 0%, #111111 35%, #2b2b2b 60%, #1a1a1a 85%, #000000 100%); }
 
 * { font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif; }
 body { background: var(--brand-bg); }
@@ -21,7 +47,8 @@ h1, h2, h3, h4, h5, .fw-brand { font-weight: 800; } /* Poppins ExtraBold en tít
 .btn-brand:focus { box-shadow: 0 0 0 .25rem rgba(24,130,205,.3); }
 
 .navbar-brand-bar { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); }
-.sidebar { background: var(--brand-blue-dark); min-height: 100vh; }
+.sidebar { background: var(--sidebar-bg); min-height: 100vh; }
+#sidebarOffcanvas { background: var(--sidebar-bg); }
 .sidebar .nav-link { color: rgba(255,255,255,.85); border-radius: .5rem; }
 .sidebar .nav-link:hover, .sidebar .nav-link.active { background: rgba(255,255,255,.12); color: #fff; }
 
@@ -66,3 +93,38 @@ h1, h2, h3, h4, h5, .fw-brand { font-weight: 800; } /* Poppins ExtraBold en tít
 /* ── Ítems de resultados (autocomplete / listas) — centralizado ── */
 .res-item { cursor: pointer; }
 .res-item:hover { background: #e7f1fa; }
+
+/* ── Fila clicable: abre la página de detalle ── */
+tr.fila-link { cursor: pointer; }
+
+/* ── Selects con búsqueda (Tom Select) — integración con el tema ──
+   Tom Select oculta el <select> original e inserta su propio wrapper
+   (al que copiamos las clases form-select). Solo retocamos el foco con
+   el color corporativo y el desplegable. */
+.ts-wrapper { min-width: 120px; }
+/* Una sola línea: el control crece a la derecha con el texto, nunca en alto. */
+.ts-wrapper.form-select.single { width: max-content; }
+.ts-wrapper.single .ts-control { flex-wrap: nowrap; }
+.ts-wrapper.single .ts-control > .item { white-space: nowrap; }
+.ts-wrapper.single .ts-control > input { min-width: 0 !important; }
+/* Red de seguridad: nunca ocultar/sacar del flujo el wrapper del control. */
+.ts-wrapper.ts-hidden-accessible,
+.ts-wrapper.tomselected {
+  position: relative !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+.ts-wrapper.form-select { cursor: pointer; }
+.ts-wrapper .ts-control.focus,
+.ts-wrapper.focus .ts-control {
+  border-color: var(--brand-blue) !important;
+  box-shadow: 0 0 0 .25rem rgba(24,130,205,.15);
+}
+.ts-wrapper.form-select.focus {
+  border-color: var(--brand-blue);
+  box-shadow: 0 0 0 .25rem rgba(24,130,205,.15);
+}
+.ts-dropdown { border-color: #dee2e6; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+.ts-dropdown .option.active { background: var(--brand-blue); color: #fff; }
+.ts-dropdown .dropdown-input { border-radius: .25rem; }

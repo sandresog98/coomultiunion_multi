@@ -16,5 +16,7 @@ $rid = (int) ($in['responsable_id'] ?? 0);
 if ($id <= 0 || $rid <= 0) {
     Http::fail('Faltan id o responsable_id');
 }
+$estado = trim((string) ($in['estado_destino'] ?? ''));
+$estado = $estado !== '' ? $estado : 'asignado';
 
-Http::ok($service->asignar($id, $rid, $actor));
+Http::ok($service->asignar($id, $rid, $actor, $estado));

@@ -23,6 +23,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
         <span><i class="fas fa-undo me-2"></i>Reversiones</span>
         <span class="d-flex gap-2 align-items-center">
           <span class="small text-white-50" id="infoR"></span>
+          <span id="fSizeR"></span>
           <?php if ($canRevertir): ?>
           <button class="btn btn-light btn-sm" onclick="abrirWizard()"><i class="fas fa-undo me-1"></i>Registrar reversión</button>
           <?php endif; ?>
@@ -51,14 +52,17 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <div class="card">
       <div class="card-header brand d-flex justify-content-between align-items-center">
         <span><i class="fas fa-ticket-alt me-2"></i>Bonos</span>
-        <span class="small text-white-50" id="infoB"></span>
+        <span class="d-flex align-items-center gap-2">
+          <span class="small text-white-50" id="infoB"></span>
+          <span id="fSizeB"></span>
+        </span>
       </div>
       <div class="card-body">
         <div class="row g-2 mb-3 align-items-end">
           <div class="col-auto" style="max-width:260px"><label class="form-label small text-muted mb-0">Buscar</label>
             <input class="form-control" id="qB" placeholder="Cédula o nombre…"></div>
           <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label>
-            <select class="form-select" id="estB" style="width:130px"><option value="">Todos</option><option value="activo">Activo</option><option value="usado">Usado</option><option value="expirado">Expirado</option></select></div>
+            <select class="form-select" id="estB" data-searchable style="width:130px"><option value="">Todos</option><option value="activo">Activo</option><option value="usado">Usado</option><option value="expirado">Expirado</option></select></div>
         </div>
         <div id="alertB" class="alert d-none"></div>
         <div class="table-responsive">
@@ -94,9 +98,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
-const PAGE_SIZE=20;
-let stR={q:'',d1:'',page:0,order:'id',dir:'DESC'};
-let stB={q:'',est:'',page:0,order:'id',dir:'DESC'};
+const UI=<?php echo json_encode(uiBaseUrl()); ?>;
+let stR={q:'',d1:'',page:0,size:20,order:'id',dir:'DESC'};
+let stB={q:'',est:'',page:0,size:20,order:'id',dir:'DESC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
@@ -104,7 +108,8 @@ function post(p,d){return api(p,{method:'POST',headers:{'Content-Type':'applicat
 function showA(id,m,ok){const e=document.getElementById(id);e.className='alert '+(ok?'alert-success':'alert-danger');e.textContent=m;e.classList.remove('d-none');}
 
 document.querySelectorAll('.sortable').forEach(th=>th.addEventListener('click',function(){
-  const tab=this.closest('.tab-pane').id==='paneRev';
+  const tp=this.closest('.tab-pane');if(!tp)return;
+  const tab=tp.id==='paneRev';
   const s=tab?stR:stB;const col=th.dataset.col;
   if(s.order===col)s.dir=s.dir==='ASC'?'DESC':'ASC';else{s.order=col;s.dir='ASC';}
   s.page=0;tab?cargarR():cargarB();
@@ -114,7 +119,7 @@ function renderSortIcons(tab){const s=tab==='R'?stR:stB;const sel=tab==='R'?'#pa
   const col=th.dataset.col,a=s.order===col;th.classList.toggle('active',a);
   const txt=th.textContent.trim().replace(/[▲▼]/g,'');th.innerHTML=txt+(a?` <span class="sort-icon">${s.dir==='ASC'?'▲':'▼'}</span>`:'');});}
 function renderPagination(elId,total,s){
-  const el=document.getElementById(elId),N=Math.ceil(total/PAGE_SIZE),C=s.page;
+  const el=document.getElementById(elId),N=Math.ceil(total/s.size),C=s.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h='';if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go('${elId}',${C-1})">«</a></li>`;
@@ -130,11 +135,11 @@ document.getElementById('qB').addEventListener('input',function(){clearTimeout(t
 document.getElementById('estB').addEventListener('change',function(){stB.est=this.value;stB.page=0;cargarB();});
 
 async function cargarR(){
-  const off=stR.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(stR.q)}&fecha_desde=${stR.d1}&limit=${PAGE_SIZE}&offset=${off}&order=${stR.order}&dir=${stR.dir}`;
+  const off=stR.page*stR.size;
+  const p=`q=${encodeURIComponent(stR.q)}&fecha_desde=${stR.d1}&limit=${stR.size}&offset=${off}&order=${stR.order}&dir=${stR.dir}`;
   try{
     const d=await api('tienda/reversiones.php?action=listar&'+p);
-    document.getElementById('infoR').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoR').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+stR.size,d.total)} de ${d.total}`:'';
     renderSortIcons('R');
     document.getElementById('tbodyR').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td>${a.id}</td><td>${esc(String(a.fecha_creacion||'').replace('T',' ').slice(0,16))}</td>
@@ -147,11 +152,11 @@ async function cargarR(){
   }catch(e){showA('alertR',e.message,false);}
 }
 async function cargarB(){
-  const off=stB.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(stB.q)}&estado=${stB.est}&limit=${PAGE_SIZE}&offset=${off}&order=${stB.order}&dir=${stB.dir}`;
+  const off=stB.page*stB.size;
+  const p=`q=${encodeURIComponent(stB.q)}&estado=${stB.est}&limit=${stB.size}&offset=${off}&order=${stB.order}&dir=${stB.dir}`;
   try{
     const d=await api('tienda/bonos.php?action=listar&'+p);
-    document.getElementById('infoB').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoB').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+stB.size,d.total)} de ${d.total}`:'';
     renderSortIcons('B');
     document.getElementById('tbodyB').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td>${a.id}</td><td>${esc(a.acreedor_nombre||a.cedula||a.cliente_id||'—')}</td>
@@ -196,6 +201,8 @@ async function wizGuardar(){
   }catch(e){showA('alertR',e.message,false);}
 }
 
+window.Listado.mountSize('fSizeR', stR, cargarR, {id:'fSizeR'});
+window.Listado.mountSize('fSizeB', stB, cargarB, {id:'fSizeB'});
 cargarR(); cargarB();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

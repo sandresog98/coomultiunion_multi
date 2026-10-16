@@ -19,7 +19,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto">
         <label class="form-label small text-muted mb-0">CECO</label>
-        <select class="form-select" id="ceco" style="width:230px">
+        <select class="form-select" id="ceco" data-searchable style="width:230px">
           <option value="">Seleccione…</option>
           <option>TIENDA GALERIAS</option>
           <option>COOPERATIVA OFICINA</option>

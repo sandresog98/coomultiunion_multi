@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once dirname(__DIR__, 3) . '/_env.php';
 $id = (int) ($_GET['id'] ?? 0);
-if ($id <= 0) { header('Location: ' . $CX . '/modules/solicitud_credito/pages/mis_solicitudes'); exit; }
+if ($id <= 0) { header('Location: ' . cx_url('solicitar-credito')); exit; }
 $pageTitle = 'Autorizar solicitud';
 $activeNav = 'solic';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';
@@ -51,7 +51,7 @@ var SOLID=<?= $id ?>;
       var j=await r.json();
       if(!j.ok){ msg.className='alert py-2 small alert-danger'; msg.textContent=j.error||'Error'; msg.classList.remove('d-none'); return; }
       msg.className='alert py-2 small alert-success'; msg.textContent='Solicitud autorizada correctamente.'; msg.classList.remove('d-none');
-      setTimeout(function(){window.location=''+CX_BASE+'/modules/solicitud_credito/pages/mis_solicitudes';},900);
+      setTimeout(function(){window.location=cxUrl('solicitar-credito');},900);
     }catch(err){ msg.className='alert py-2 small alert-danger'; msg.textContent='Error de conexión'; msg.classList.remove('d-none'); }
   });
 })();

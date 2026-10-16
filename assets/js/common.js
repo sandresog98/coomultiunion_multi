@@ -52,9 +52,12 @@
     return null;
   }
   document.addEventListener('click', function (e) {
-    lastClicked = closer(e.target);
-    clearTimeout(lastClicked._idemT);
-    lastClicked._idemT = setTimeout(function () { lastClicked = null; }, 1500);
+    var c = closer(e.target);
+    if (c) {
+      clearTimeout(c._idemT);
+      c._idemT = setTimeout(function () { lastClicked = null; }, 1500);
+    }
+    lastClicked = c;
   }, true);
 
   function guardOn(ctl) {

@@ -12,7 +12,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
       <div class="card-header-brand mb-3"><i class="fa-solid fa-gift fa-lg"></i><div><div class="fw-semibold">Solicitar beneficio</div><div class="crumb">Completa los datos para enviar tu solicitud</div></div></div>
       <div id="msg" class="d-none alert py-2 small"></div>
       <div id="loading" class="text-center text-muted py-4">Cargando convenio…</div>
-      <div id="noApto" class="d-none"><div class="alert alert-danger small">No puedes solicitar este beneficio.</div><a class="btn btn-sm btn-portal-outline" href="<?= $CX ?>/modules/fondo_bienestar/pages/index">Volver a beneficios</a></div>
+      <div id="noApto" class="d-none"><div class="alert alert-danger small">No puedes solicitar este beneficio.</div><a class="btn btn-sm btn-portal-outline" href="<?= cx_url('fondo-bienestar') ?>">Volver a beneficios</a></div>
       <form id="solForm" class="d-none" enctype="multipart/form-data">
         <input type="hidden" id="convenio_id">
         <div class="mb-3">
@@ -77,7 +77,7 @@ document.getElementById('solForm').addEventListener('submit',function(e){
   var b=document.getElementById('btnSol'); b.disabled=true;
   fetch(CX_API+'/fondo/solicitar.php',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(j){
     b.disabled=false;
-    if(j.ok){window.location.href=CX_BASE+'/modules/solicitudes/pages/mis_solicitudes';}
+    if(j.ok){window.location.href=cxUrl('solicitudes/mis');}
     else msg(j.error||'Error','danger');
   }).catch(function(e){b.disabled=false;msg('Error de conexión','danger');});
 });

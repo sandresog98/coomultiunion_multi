@@ -10,20 +10,23 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-file-invoice-dollar me-2"></i>Facturación</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
   </div>
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto" style="max-width:240px"><label class="form-label small text-muted mb-0">Buscar</label>
         <input class="form-control" id="q" placeholder="Nº venta, cédula, nombre…"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Tipo</label>
-        <select class="form-select" id="tipoF" style="width:130px"><option value="">Todos</option><option value="asociado">Asociado</option><option value="externo">Externo</option></select></div>
+        <select class="form-select" id="tipoF" data-searchable style="width:130px"><option value="">Todos</option><option value="asociado">Asociado</option><option value="externo">Externo</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label>
         <input class="form-control" type="date" id="d1" style="width:160px"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Hasta</label>
         <input class="form-control" type="date" id="d2" style="width:160px"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">CECO</label>
-        <select class="form-select" id="cecoF" style="width:190px"><option value="">Todos</option><option>TIENDA GALERIAS</option><option>COOPERATIVA OFICINA</option><option>REDES - WEB</option></select></div>
+        <select class="form-select" id="cecoF" data-searchable style="width:190px"><option value="">Todos</option><option>TIENDA GALERIAS</option><option>COOPERATIVA OFICINA</option><option>REDES - WEB</option></select></div>
     </div>
     <div id="alert" class="alert d-none"></div>
     <div class="table-responsive">
@@ -86,8 +89,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert');
-let state={q:'',tipo:'',d1:'',d2:'',ceco:'',page:0,order:'id',dir:'DESC'};
+const alertBox=document.getElementById('alert');
+let state={q:'',tipo:'',d1:'',d2:'',ceco:'',page:0,size:20,order:'id',dir:'DESC'};
 let revDetId=null;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
@@ -106,11 +109,11 @@ for(const id of ['q','tipoF','d1','d2','cecoF'])document.getElementById(id).addE
   state.q=document.getElementById('q').value.trim();state.tipo=document.getElementById('tipoF').value;state.d1=document.getElementById('d1').value;
   state.d2=document.getElementById('d2').value;state.ceco=document.getElementById('cecoF').value;state.page=0;cargar();},300);});
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(state.q)}&tipo_cliente=${state.tipo}&fecha_desde=${state.d1}&fecha_hasta=${state.d2}&ceco=${encodeURIComponent(state.ceco)}&limit=${PAGE_SIZE}&offset=${off}&order=${state.order}&dir=${state.dir}`;
+  const off=state.page*state.size;
+  const p=`q=${encodeURIComponent(state.q)}&tipo_cliente=${state.tipo}&fecha_desde=${state.d1}&fecha_hasta=${state.d2}&ceco=${encodeURIComponent(state.ceco)}&limit=${state.size}&offset=${off}&order=${state.order}&dir=${state.dir}`;
   try{
     const d=await api('tienda/ventas.php?action=listar&'+p);
-    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+state.size,d.total)} de ${d.total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr>
       <td class="fw-semibold">#${a.id}</td>
@@ -126,7 +129,7 @@ async function cargar(){
   }catch(e){showA(e.message,false);}
 }
 function renderPagination(total){
-  const N=Math.ceil(total/PAGE_SIZE),el=document.getElementById('paginacion'),C=state.page;
+  const N=Math.ceil(total/state.size),el=document.getElementById('paginacion'),C=state.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h='';if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`;
@@ -176,6 +179,7 @@ async function confirmarRev(){
   }catch(e){showA(e.message,false);}
 }
 
+window.Listado.mountSize('fSizeBox', state, cargar);
 cargar();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

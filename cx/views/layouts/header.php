@@ -3,11 +3,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../_env.php';
 $actor = PortalAuth::actor();
 if ($actor === null) {
-    header('Location: ' . $CX . '/login');
+    header('Location: ' . cx_url('login'));
     exit;
 }
 $pageTitle = $pageTitle ?? 'Portal Asociados';
 $activeNav = $activeNav ?? '';
+$__envClass = 'env-' . preg_replace('/[^a-z0-9_-]/i', '', app_env());
+$__envLabel = env_label();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -17,26 +19,31 @@ $activeNav = $activeNav ?? '';
 <meta name="csrf-token" content="<?= htmlspecialchars(\Csrf::token()) ?>">
 <title><?= htmlspecialchars($pageTitle) ?> · Coomultiunion</title>
 <link rel="icon" href="<?= $APP ?>/assets/favicons/favicon.ico" sizes="any">
+<!-- Tema: fija data-bs-theme ANTES de pintar (evita parpadeo). Por defecto: claro. -->
+<script>(function(){try{var t=localStorage.getItem('multi-theme');document.documentElement.setAttribute('data-bs-theme',t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-bs-theme','light');}})();</script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?= $APP ?>/assets/css/front.css">
 <link rel="stylesheet" href="<?= $CX ?>/assets/cx.css">
+<link rel="stylesheet" href="<?= $APP ?>/assets/css/theme-dark.css">
+<script src="<?= $APP ?>/assets/js/solicitud_detalle.js"></script>
 </head>
-<body class="portal front-body-falling">
+<body class="portal front-body-falling <?php echo $__envClass; ?>">
 <header class="portal-topbar">
   <div class="portal-topbar-inner d-flex justify-content-between align-items-center">
     <div class="d-flex align-items-center">
       <button type="button" class="btn btn-link text-white p-2 me-2 d-md-none" id="cx-drawer-toggle" aria-label="Menú"><i class="fa-solid fa-bars fa-lg"></i></button>
-      <a class="header-logos text-decoration-none" href="<?= $CX ?>/index">
+      <a class="header-logos text-decoration-none" href="<?= cx_url('inicio') ?>">
         <img class="logo-sq" src="<?= $APP ?>/assets/img/logo.png" alt="Multi Asociados">
         <img class="logo-169" src="<?= $APP ?>/assets/img/logo_coomultiunion.png" alt="Coomultiunion">
       </a>
+      <?php if ($__envLabel !== ''): ?><span class="env-badge ms-2"><?php echo $__envLabel; ?></span><?php endif; ?>
     </div>
     <div class="d-flex align-items-center gap-3 ms-auto">
-      <a class="btn-notif btn" href="<?= $CX ?>/modules/notificaciones/pages/index" title="Notificaciones" aria-label="Notificaciones"><i class="fa-solid fa-bell"></i></a>
+      <a class="btn-notif btn" href="<?= cx_url('notificaciones') ?>" title="Notificaciones" aria-label="Notificaciones"><i class="fa-solid fa-bell"></i></a>
       <span class="portal-user d-none d-md-inline"><i class="fa-regular fa-user me-1"></i><?= htmlspecialchars($actor['nombre'] ?? '') ?></span>
-      <a class="btn btn-logout btn-sm" href="<?= $CX ?>/logout" title="Salir"><i class="fa-solid fa-right-from-bracket"></i></a>
+      <a class="btn btn-logout btn-sm" href="<?= cx_url('logout') ?>" title="Salir"><i class="fa-solid fa-right-from-bracket"></i></a>
     </div>
   </div>
 </header>
@@ -51,6 +58,47 @@ $activeNav = $activeNav ?? '';
 /* Helpers globales del portal: se definen ANTES de los scripts inline de cada página. */
 window.CX_API  = <?= json_encode($API) ?>;
 window.CX_BASE = <?= json_encode($CX) ?>;
+/* Mapa de rutas amigables (slug -> URL) y helper para construir enlaces en JS.
+   Soporta segmentos dinámicos: cxUrl('creditos/{numero}', {numero: '0001'})
+   -> /base/cx/creditos/0001 ; los parámetros restantes van como query string. */
+window.CX_URLS = <?= json_encode(cx_urls_map()) ?>;
+window.cxUrl = function(slug, params){
+  slug = String(slug == null ? '' : slug).replace(/^\/+|\/+$/g, '');
+  params = params || {};
+  slug = slug.replace(/\{([a-zA-Z0-9_]+)\}/g, function(_, name){
+    var v = params[name];
+    if(v === undefined || v === null) return '';
+    delete params[name];
+    return encodeURIComponent(v);
+  });
+  var url = window.CX_URLS[slug] || (String(window.CX_BASE).replace(/\/+$/,'') + '/' + slug);
+  var q = [];
+  for(var k in params){
+    if(!Object.prototype.hasOwnProperty.call(params,k)) continue;
+    if(params[k] === undefined || params[k] === null) continue;
+    q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+  }
+  if(q.length) url += (url.indexOf('?') >= 0 ? '&' : '?') + q.join('&');
+  return url;
+};
+/* Marca las peticiones a la API como "portal" (X-Portal-Auth) para que el backend
+   resuelva la sesión de asociado aunque exista una cookie de staff en el navegador. */
+(function(){
+  var orig = window.fetch;
+  if(typeof orig !== 'function') return;
+  window.fetch = function(input, init){
+    init = init || {};
+    try{
+      var url = (typeof input === 'string') ? input : ((input && input.url) || '');
+      if(String(url).indexOf('/api/') !== -1){
+        var h = new Headers(init.headers || (input && input.headers) || {});
+        if(!h.has('X-Portal-Auth')) h.set('X-Portal-Auth','1');
+        init.headers = h;
+      }
+    }catch(e){}
+    return orig.call(this, input, init);
+  };
+})();
 window.esc = function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
 window.money = function(v){var n=Number(v)||0;var neg=n<0;var out=Math.abs(n).toLocaleString('de-DE');return (neg?'-':'')+'$'+out;};
 window.moneyAbs = function(v){return '$'+Math.abs(Number(v)||0).toLocaleString('de-DE');};

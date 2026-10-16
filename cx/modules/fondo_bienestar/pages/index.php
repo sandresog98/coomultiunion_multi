@@ -45,8 +45,8 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
             : '<span class="small text-danger"><i class="fa-solid fa-circle-xmark"></i> '+esc(it.mensaje)+'</span>')+'</div>'+
         (it.apto && it.convenio.no_redime!=1
           ? (it.tiene_pendiente
-              ? '<a class="btn btn-sm btn-portal-outline" href="'+CX_BASE+'/modules/fondo_bienestar/pages/mis_solicitudes">Solicitud en curso</a>'
-              : '<a class="btn btn-sm btn-portal-gradient" href="'+CX_BASE+'/modules/fondo_bienestar/pages/solicitar?convenio_id='+c.id+'"><i class="fa-solid fa-paper-plane me-1"></i>Solicitar</a>')
+              ? '<a class="btn btn-sm btn-portal-outline" href="'+cxUrl('solicitudes/mis')+'">Solicitud en curso</a>'
+              : '<a class="btn btn-sm btn-portal-gradient" href="'+cxUrl('fondo-bienestar/{convenio_id}',{convenio_id:c.id})+'"><i class="fa-solid fa-paper-plane me-1"></i>Solicitar</a>')
           : '')+
         '</div></div>';
     }).join('');

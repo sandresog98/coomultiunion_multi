@@ -5,7 +5,7 @@ $pageTitle = 'Mis solicitudes';
 $activeNav = 'solicitudes';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';
 ?>
-<div class="mb-2"><a class="btn btn-sm btn-portal-outline" href="<?= $CX ?>/modules/solicitudes/pages/index"><i class="fa-solid fa-arrow-left me-1"></i>Volver a solicitudes</a></div>
+<div class="mb-2"><a class="btn btn-sm btn-portal-outline" href="<?= cx_url('solicitudes') ?>"><i class="fa-solid fa-arrow-left me-1"></i>Volver a solicitudes</a></div>
 <div class="portal-card portal-card-glowing-border">
   <div class="card-header-brand mb-3"><i class="fa-solid fa-list-check fa-lg"></i><div class="fw-semibold">Mis solicitudes</div></div>
   <div id="box" class="text-center text-muted py-4">Cargando…</div>
@@ -29,9 +29,9 @@ const ESTBADGE={pendiente:['Pendiente','bg-secondary'],recibido:['Recibido','bg-
         {label:'Radicado',val:function(s){return s.numero_radicado;}},
         {label:'Tipo',val:function(s){return s.tipo_codigo;},html:function(s){return '<span class="badge-etapa bg-primary">'+(TIPOS[s.tipo_codigo]||s.tipo_codigo)+'</span>';}},
         {label:'Estado',val:function(s){return s.estado_codigo;},html:function(s){var e=ESTBADGE[s.estado_codigo]||[s.estado_codigo,'bg-secondary'];return '<span class="badge-etapa '+e[1]+'">'+e[0]+'</span>';}},
-        {label:'Fecha',val:function(s){return cxFecha(s.fecha_creacion);}},
-        {label:'Acciones',sort:false,val:function(){return'';},html:function(s){return '<a class="btn btn-sm btn-portal-outline" href="'+CX_BASE+'/modules/solicitudes/pages/detalle?id='+s.id+'">Ver</a>';}},
-      ],filas:rows
+        {label:'Fecha',val:function(s){return Date.parse(s.fecha_creacion)||0;},html:function(s){return cxFecha(s.fecha_creacion);}},
+        {label:'Acciones',sort:false,val:function(){return'';},html:function(s){return '<a class="btn btn-sm btn-portal-outline" href="'+cxUrl('solicitudes/{id}',{id:s.id})+'">Ver</a>';}},
+      ],filas:rows,defaultSort:{col:3,dir:-1}
     });
   }).catch(e=>{box.textContent='Error de conexión.';});
 })();

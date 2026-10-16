@@ -9,8 +9,10 @@
  */
 require_once __DIR__ . '/../../config/paths.php';
 require_once dirname(__DIR__, 3) . '/core/Permisos.php';
+require_once dirname(__DIR__, 3) . '/core/env.php';
 $rol   = $staff['rol'] ?? '';
 $cp    = $currentPage ?? '';
+$__envLabel = $__envLabel ?? env_label();
 
 /**
  * Nodo: ['tipo'=>'link|grupo', 'label', 'icon', 'key'(solo link), 'href'(solo link),
@@ -62,6 +64,7 @@ $menu = [
     ['tipo'=>'grupo', 'label'=>'Configuración', 'icon'=>'fa-cog', 'perm'=>null, 'hijos'=>[
         ['tipo'=>'link', 'label'=>'Productos y Cláusulas', 'icon'=>'fa-boxes-stacked', 'key'=>'config', 'href'=>'modules/config/pages/config', 'perm'=>'oficina', 'built'=>true, 'b'=>'B4', 'p'=>10],
         ['tipo'=>'link', 'label'=>'Tipos de movimiento', 'icon'=>'fa-sliders',   'key'=>'movimientos_tipos','href'=>'modules/config/pages/movimientos_tipos','perm'=>'oficina.movimientos_tipos','built'=>true, 'b'=>'B4', 'p'=>9],
+        ['tipo'=>'link', 'label'=>'Parámetros de solicitudes', 'icon'=>'fa-gears', 'key'=>'configuracion', 'href'=>'modules/config/pages/parametros', 'perm'=>'configuracion', 'built'=>true, 'b'=>'B7', 'p'=>14],
         ['tipo'=>'link', 'label'=>'Tipos de comunicación', 'icon'=>'fa-comments', 'key'=>'cobranza_tipos', 'href'=>'modules/config/pages/cobranza_tipos', 'perm'=>'cobranza', 'built'=>true, 'b'=>'B6', 'p'=>28],
         ['tipo'=>'link', 'label'=>'Fondo de Bienestar', 'icon'=>'fa-gift', 'key'=>'fondo_bienestar', 'href'=>'modules/fondo_bienestar/pages/convenios', 'perm'=>'solicitudes.fondo_bienestar', 'built'=>true, 'b'=>'B7', 'p'=>14],
         ['tipo'=>'link', 'label'=>'Categorías de ticket', 'icon'=>'fa-folder-tree', 'key'=>'ticket_categorias', 'href'=>'modules/solicitudes/pages/ticket_categorias', 'perm'=>'solicitudes.gestion', 'built'=>true, 'b'=>'B7', 'p'=>22],
@@ -144,22 +147,34 @@ function menuRender(array $items, string $rol, string $cp, string $ns, string $p
 <nav class="col-md-3 col-lg-2 d-none d-md-block sidebar p-3">
   <div class="text-center text-white mb-4">
     <img src="<?php echo assetUrl('img/logo.png'); ?>" alt="Multi" class="mb-2" style="height:64px;max-width:100%;object-fit:contain;" />
-    <div class="fw-brand fs-6">Multi App <small class="text-white-50">v2</small></div>
+    <div class="fw-brand fs-6">Multi App <small class="text-white-50">v2</small><?php if ($__envLabel !== ''): ?> <span class="env-badge ms-1"><?php echo $__envLabel; ?></span><?php endif; ?></div>
   </div>
   <div class="nav flex-column">
     <?php menuRender(menuVisibles($menu, $rol), $rol, $cp, 'sb'); ?>
   </div>
+  <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+    <button type="button" class="nav-link theme-toggle d-flex align-items-center gap-2 w-100" data-theme-toggle aria-pressed="false">
+      <i class="fas fa-moon" data-theme-icon></i>
+      <span data-theme-label>Tema oscuro</span>
+    </button>
+  </div>
 </nav>
 
-<div class="offcanvas offcanvas-start d-md-none" id="sidebarOffcanvas" tabindex="-1" style="background:var(--brand-blue-dark);max-width:280px">
+<div class="offcanvas offcanvas-start d-md-none" id="sidebarOffcanvas" tabindex="-1" style="max-width:280px">
   <div class="offcanvas-header border-bottom border-white border-opacity-25">
     <img src="<?php echo assetUrl('img/logo.png'); ?>" alt="Multi" style="height:36px;object-fit:contain;" class="me-2" />
-    <h5 class="text-white fw-brand mb-0">Multi App <small class="text-white-50">v2</small></h5>
+    <h5 class="text-white fw-brand mb-0">Multi App <small class="text-white-50">v2</small><?php if ($__envLabel !== ''): ?> <span class="env-badge ms-1"><?php echo $__envLabel; ?></span><?php endif; ?></h5>
     <button class="btn-close btn-close-white ms-auto" data-bs-dismiss="offcanvas"></button>
   </div>
   <div class="offcanvas-body">
     <div class="nav flex-column">
       <?php menuRender(menuVisibles($menu, $rol), $rol, $cp, 'oc'); ?>
+    </div>
+    <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+      <button type="button" class="nav-link theme-toggle d-flex align-items-center gap-2 w-100" data-theme-toggle aria-pressed="false">
+        <i class="fas fa-moon" data-theme-icon></i>
+        <span data-theme-label>Tema oscuro</span>
+      </button>
     </div>
   </div>
 </div>

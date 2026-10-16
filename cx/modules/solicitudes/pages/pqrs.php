@@ -51,7 +51,7 @@ function listar(){
       {label:'Radicado',val:function(s){return s.numero_radicado;}},
       {label:'Estado',val:function(s){return s.estado_codigo;},html:function(s){return est(s.estado_codigo);}},
       {label:'Fecha',val:function(s){return cxFecha(s.fecha_creacion);}},
-      {label:'',sort:false,val:function(){return'';},html:function(s){return '<a class="btn btn-sm btn-portal-outline" href="'+CX_BASE+'/modules/solicitudes/pages/detalle?id='+s.id+'">Ver</a>';}},
+      {label:'',sort:false,val:function(){return'';},html:function(s){return '<a class="btn btn-sm btn-portal-outline" href="'+cxUrl('solicitudes/{id}',{id:s.id})+'">Ver</a>';}},
     ],filas:rows});
   });
 }

@@ -1,0 +1,263 @@
+/* ============================================================
+   theme-dark.css — Tema oscuro (opt-in) de Multi App v2
+   ------------------------------------------------------------
+   Cómo funciona:
+   - Se carga SIEMPRE, después de common.css (ui) y de
+     front.css + cx.css (cx).
+   - TODAS las reglas de color viven bajo [data-bs-theme="dark"],
+     atributo que fija assets/js/theme.js (y el snippet anti-FOUC
+     del <head>). Si el atributo NO está (modo claro, pantallas de
+     login, superficies públicas como tienda/convenios/simulador),
+     este archivo no altera absolutamente nada.
+   - El modo claro sigue viviendo 100% en common.css/front.css/cx.css
+     sin cambios.
+   ============================================================ */
+
+/* ---------- 1) Tokens (superficies claras del tema actual) ---------- */
+[data-bs-theme="dark"] {
+  color-scheme: dark;
+
+  /* Bootstrap: paleta oscura con tinte corporativo azul */
+  --bs-body-bg: #0e1621;
+  --bs-body-color: #d7e1ec;
+  --bs-secondary-bg: #16212e;
+  --bs-tertiary-bg: #1b2735;
+  --bs-secondary-color: rgba(215, 225, 236, .72);
+  --bs-border-color: #26344a;
+  --bs-border-color-translucent: rgba(255, 255, 255, .12);
+  --bs-card-bg: #16212e;
+  --bs-card-cap-bg: #1b2735;
+  --bs-accordion-bg: #16212e;
+  --bs-modal-bg: #16212e;
+  --bs-offcanvas-bg: #16212e;
+  --bs-dropdown-bg: #16212e;
+  --bs-emphasis-color: #ffffff;
+
+  /* Staff (common.css) */
+  --brand-bg: #0e1621;
+
+  /* Front compartido (front.css) — lo usa el portal cx.
+     Página más oscura que las superficies para que las tarjetas y el
+     sidebar se distingan con claridad. */
+  --front-bg: #0a101a;
+  --front-ink: #d7e1ec;
+  --front-muted: #93a4b8;
+  --front-line: #26344a;
+  --front-card: #16212e;
+  --front-fp: rgba(24, 130, 205, .16);
+  --front-shadow: 0 2px 10px rgba(0, 0, 0, .45);
+  --front-shadow-lg: 0 10px 26px rgba(0, 0, 0, .55);
+
+  /* Portal (cx.css) */
+  --cx-bg-app: #0a101a;
+  --cx-bg-surface: #16212e;
+  --cx-sidebar-bg: #1b2735;   /* panel del sidebar, un paso más claro que la página */
+  --cx-text-primary: #d7e1ec;
+  --cx-text-secondary: #93a4b8;
+  --cx-shadow-card: 0 2px 8px rgba(0, 0, 0, .5);
+}
+
+/* ---------- 2) Utilidades Bootstrap no adaptativas ---------- */
+/* Bootstrap deja bg-light/bg-white/table-light/text-bg-light/text-dark
+   con valores claros fijos; los reajustamos al tema oscuro. */
+[data-bs-theme="dark"] .bg-light { background-color: #1b2735 !important; }
+[data-bs-theme="dark"] .bg-white  { background-color: #16212e !important; }
+/* .text-dark: sobre superficies oscuras pasa a texto claro, EXCEPTO en
+   badges/fondos claros (bg-warning/bg-info/bg-light) donde el texto debe
+   seguir siendo oscuro. */
+[data-bs-theme="dark"] .text-dark:not(.badge):not(.bg-warning):not(.bg-info):not(.bg-light) { color: #d7e1ec !important; }
+[data-bs-theme="dark"] .badge.text-dark,
+[data-bs-theme="dark"] .bg-warning { color: #1a1a1a !important; }
+[data-bs-theme="dark"] .bg-info    { color: #03212b !important; }
+
+[data-bs-theme="dark"] .text-bg-light {
+  color: #d7e1ec !important;
+  background-color: #2b3a4d !important;
+}
+
+[data-bs-theme="dark"] .table-light {
+  --bs-table-color: #d7e1ec;
+  --bs-table-bg: #1b2735;
+  --bs-table-border-color: #26344a;
+  --bs-table-striped-bg: #1e2b3a;
+  --bs-table-striped-color: #d7e1ec;
+  --bs-table-hover-bg: #223246;
+  --bs-table-hover-color: #ffffff;
+  color: #d7e1ec;
+}
+
+/* ---------- 3) Marca legible sobre fondo oscuro ---------- */
+[data-bs-theme="dark"] .text-brand      { color: #6fb3e8; }
+[data-bs-theme="dark"] .text-brand-dark { color: #8fc5ee; }
+[data-bs-theme="dark"] .text-brand-blue { color: #6fb3e8; }
+[data-bs-theme="dark"] a.text-brand:hover { color: #a5d0f2; }
+
+/* ---------- 4) Staff (common.css) ---------- */
+[data-bs-theme="dark"] .card { box-shadow: 0 4px 20px rgba(0, 0, 0, .5); }
+
+[data-bs-theme="dark"] .hist-item { border-bottom-color: #26344a; }
+[data-bs-theme="dark"] .hist-item:hover { background: #1b2735; }
+[data-bs-theme="dark"] .hist-header[aria-expanded="true"] { background: #16283c; }
+
+[data-bs-theme="dark"] .res-item:hover { background: #16283c; }
+[data-bs-theme="dark"] .sortable:hover { background: rgba(24, 130, 205, .18); }
+[data-bs-theme="dark"] .sortable .sort-icon { color: #6b7c90; }
+
+/* Listas de autocompletado con style inline (background:#fff) */
+[data-bs-theme="dark"] .list-group.position-absolute {
+  background-color: var(--bs-body-bg) !important;
+  border-color: var(--bs-border-color) !important;
+}
+
+/* Tom Select (selects con búsqueda del staff) */
+[data-bs-theme="dark"] .ts-wrapper .ts-control {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+[data-bs-theme="dark"] .ts-control > input { color: var(--bs-body-color); }
+[data-bs-theme="dark"] .ts-dropdown {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .5);
+}
+[data-bs-theme="dark"] .ts-dropdown .option:hover,
+[data-bs-theme="dark"] .ts-dropdown .option.active { background: var(--brand-blue); color: #fff; }
+[data-bs-theme="dark"] .ts-dropdown .dropdown-input {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+  border-color: var(--bs-border-color);
+}
+
+/* ---------- 5) Front compartido (front.css) — portal cx ---------- */
+[data-bs-theme="dark"] .front-body-falling::after {
+  background-image: radial-gradient(circle at 50% 50%, transparent 0, transparent 2px, rgba(255, 255, 255, .08) 2px);
+}
+[data-bs-theme="dark"] .front-table thead th {
+  background: #1b2735;
+  color: var(--front-muted);
+  border-bottom-color: #26344a;
+}
+[data-bs-theme="dark"] .front-table tbody td { border-bottom-color: #1e2b3a; }
+[data-bs-theme="dark"] .front-table tbody tr:hover { background: #16212e; }
+[data-bs-theme="dark"] .front-page { background: #16212e; color: var(--front-ink); border-color: var(--front-line); }
+[data-bs-theme="dark"] .front-page.is-active { background: var(--brand-blue-dark); color: #fff; }
+[data-bs-theme="dark"] .front-modal { background: #16212e; color: var(--front-ink); }
+[data-bs-theme="dark"] .front-card { background: var(--front-card); }
+[data-bs-theme="dark"] .front-page-title { color: #8fc5ee; }
+[data-bs-theme="dark"] .front-btn-outline { background: #1b2735; color: #8fc5ee; border-color: var(--front-line); }
+[data-bs-theme="dark"] .front-btn-outline:hover { color: #a5d0f2; border-color: var(--brand-blue); }
+
+/* ---------- 6) Portal (cx.css) ---------- */
+/* Sidebar: panel propio, más claro que la página, con divisor y elevación
+   para que no se confunda con el área de contenido. */
+[data-bs-theme="dark"] .portal-sidebar {
+  background: var(--cx-sidebar-bg);
+  border-right-color: #2f4058;
+  box-shadow: 6px 0 22px rgba(0, 0, 0, .35);
+}
+
+/* Los ítems del dock se pintan en cx.css con el selector
+   `.portal-dock-nav a.portal-dock-item` (más específico); replicamos
+   ese nivel para poder sobreescribirlos en oscuro. */
+[data-bs-theme="dark"] .portal-dock-nav a.portal-dock-item {
+  color: var(--cx-text-primary);
+  background: linear-gradient(-75deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04));
+}
+[data-bs-theme="dark"] .portal-dock-nav a.portal-dock-item:hover {
+  background: rgba(255, 255, 255, .14);
+}
+[data-bs-theme="dark"] .portal-dock-nav a.portal-dock-item .portal-dock-icon {
+  background: rgba(255, 255, 255, .14);
+  color: #cfe3f5;
+}
+
+/* Encabezados de tarjeta: cx.css los fuerza a azul oscuro (--cx-dark),
+   ilegible en fondos oscuros. */
+[data-bs-theme="dark"] .card-header-brand { color: #cfe3f5; }
+[data-bs-theme="dark"] .card-header-brand .crumb { color: var(--cx-text-secondary); }
+/* Estilos inline "color:var(--cx-dark)" (íconos, montos aprobados, total). */
+[data-bs-theme="dark"] [style*="color:var(--cx-dark)"] { color: #8fc5ee !important; }
+
+[data-bs-theme="dark"] .portal-page-title {
+  background: linear-gradient(90deg, #7fb8e6, #1882CD, #7fb8e6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+[data-bs-theme="dark"] .portal-area-title { color: #d7e1ec; }
+[data-bs-theme="dark"] .portal-card-glowing-border {
+  border-color: rgba(24, 130, 205, .55);
+  box-shadow: 0 0 12px rgba(24, 130, 205, .22);
+}
+
+[data-bs-theme="dark"] .portal-table thead th { background: #1b2735; border-bottom-color: #26344a; }
+[data-bs-theme="dark"] .portal-table tbody td { border-bottom-color: #1e2b3a; }
+[data-bs-theme="dark"] .portal-table tbody tr:hover { background: #16212e; }
+[data-bs-theme="dark"] .badge-mora { background: rgba(235, 48, 49, .18); color: #ff8a8b; }
+
+[data-bs-theme="dark"] .portal-input,
+[data-bs-theme="dark"] .portal-select {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+[data-bs-theme="dark"] .btn-eye { background: #1b2735; color: #cfe3f5; }
+[data-bs-theme="dark"] .btn-eye:hover { color: #ffffff; }
+
+/* Botón de contorno de marca: borde/texto azul oscuro → azul claro. */
+[data-bs-theme="dark"] .btn-portal-outline { border-color: #8fc5ee; color: #8fc5ee; }
+[data-bs-theme="dark"] .btn-portal-outline:hover { background: #8fc5ee; color: #0a101a; }
+
+
+/* ============================================================
+   7) Control del tema (visible en ambos temas)
+   - ui:  .sidebar .theme-toggle / #sidebarOffcanvas .theme-toggle
+   - cx:  .portal-theme-toggle (aspecto del dock del portal)
+   ============================================================ */
+.theme-toggle {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar .theme-toggle,
+#sidebarOffcanvas .theme-toggle { color: rgba(255, 255, 255, .85); }
+.sidebar .theme-toggle:hover,
+#sidebarOffcanvas .theme-toggle:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+
+.portal-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  width: 100%;
+  padding: .65rem .85rem;
+  margin-bottom: .35rem;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  color: var(--cx-text-primary);
+  background: linear-gradient(-75deg, rgba(255, 255, 255, .7), rgba(232, 236, 241, .7));
+  transition: transform var(--cx-transition), background var(--cx-transition);
+}
+.portal-theme-toggle:hover { transform: scale(1.02); }
+.portal-theme-toggle .portal-dock-icon {
+  width: 28px; height: 28px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(255, 255, 255, .6);
+  color: var(--cx-dark); font-size: .9rem;
+}
+[data-bs-theme="dark"] .portal-theme-toggle {
+  color: var(--cx-text-primary);
+  background: linear-gradient(-75deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .03));
+}
+[data-bs-theme="dark"] .portal-theme-toggle .portal-dock-icon {
+  background: rgba(255, 255, 255, .12);
+  color: #cfe3f5;
+}

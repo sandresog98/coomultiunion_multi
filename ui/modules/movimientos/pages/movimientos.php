@@ -13,7 +13,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-coins me-2"></i>Movimientos (ingresos y egresos)</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
     <?php if ($canCrear): ?>
     <button class="btn btn-light btn-sm" onclick="abrir()"><i class="fas fa-plus me-1"></i>Nuevo</button>
     <?php endif; ?>
@@ -25,7 +28,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
         <div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input class="form-control" id="q" placeholder="Nombre, cédula, referido…"></div>
       </div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Tipo</label>
-        <select class="form-select" id="fTipo" style="width:200px"><option value="">Todos</option></select>
+        <select class="form-select" id="fTipo" data-searchable style="width:200px"><option value="">Todos</option></select>
       </div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label><input type="date" class="form-control" id="fDesde" style="width:140px"></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Hasta</label><input type="date" class="form-control" id="fHasta" style="width:140px"></div>
@@ -107,10 +110,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});}
-const API=<?php echo json_encode(apiUrl()); ?>, PAGE_SIZE=20, alertBox=document.getElementById('alert');
+const API=<?php echo json_encode(apiUrl()); ?>, alertBox=document.getElementById('alert');
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['movimientos.editar']===true,CAN_ELIM=ACC['movimientos.eliminar']===true;
-let state={q:'',tipo:'',desde:'',hasta:'',page:0,order:'fecha',dir:'DESC'};
+let state={q:'',tipo:'',desde:'',hasta:'',page:0,size:20,order:'fecha',dir:'DESC'};
 let editId=null, debounceTimer, modal, TIPOS={};
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
 
@@ -141,12 +144,12 @@ function badgeTipo(r){
 }
 
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const bs=`q=${encodeURIComponent(state.q)}&tipo=${state.tipo}&fecha_desde=${state.desde}&fecha_hasta=${state.hasta}&order=${state.order}&dir=${state.dir}&limit=${PAGE_SIZE}&offset=${off}`;
+  const off=state.page*state.size;
+  const bs=`q=${encodeURIComponent(state.q)}&tipo=${state.tipo}&fecha_desde=${state.desde}&fecha_hasta=${state.hasta}&order=${state.order}&dir=${state.dir}&limit=${state.size}&offset=${off}`;
   try{
     const d=await api('movimientos/listar?'+bs);
     const total=d.total||0;
-    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+state.size,total)} de ${total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       const det=r.detalle||{};
@@ -171,7 +174,7 @@ async function cargar(){
 }
 
 function renderPagination(t){
-  const N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
+  const N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
   const C=state.page;let pages=[];
   if(N<=10){for(let i=0;i<N;i++)pages.push(i);}
   else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
@@ -311,6 +314,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   setupAutocomplete('f_cedula_input','f_cedula','resIni',onAsociadoSeleccionado);
   setupAutocomplete('f_referido_input','f_referido','resRef');
   document.getElementById('m').addEventListener('hidden.bs.modal',()=>{document.getElementById('resIni').innerHTML='';document.getElementById('resRef').innerHTML='';ocultarDisponible();});
+  window.Listado.mountSize('fSizeBox', state, cargar);
   cargarTipos().then(()=>cargar());
 });
 </script>

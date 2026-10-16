@@ -101,7 +101,7 @@ document.getElementById('solForm').addEventListener('submit',async function(e){
     var r=await fetch(API+'/solicitudes_crear.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     var j=await r.json();
     if(!j.ok){ msg.className='alert py-2 small alert-danger'; msg.textContent=j.error||'Error'; msg.classList.remove('d-none'); btn.disabled=false; return; }
-    window.location=CX+'/modules/solicitud_credito/pages/documentos?id='+j.data.id;
+    window.location=cxUrl('solicitar-credito/{id}',{id:j.data.id});
   }catch(err){ msg.className='alert py-2 small alert-danger'; msg.textContent='Error de conexión'; msg.classList.remove('d-none'); btn.disabled=false; }
 });
 </script>

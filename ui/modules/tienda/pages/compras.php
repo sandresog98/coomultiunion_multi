@@ -12,6 +12,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <span><i class="fas fa-shopping-cart me-2"></i>Compras (historial)</span>
     <span class="d-flex gap-2 align-items-center">
       <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
       <a class="btn btn-light btn-sm" href="<?php echo uiBaseUrl(); ?>modules/tienda/pages/nueva_compra"><i class="fas fa-plus me-1"></i>Nueva compra</a>
     </span>
   </div>
@@ -46,8 +47,8 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert');
-let state={q:'',d1:'',d2:'',page:0,order:'id',dir:'DESC'};
+const alertBox=document.getElementById('alert');
+let state={q:'',d1:'',d2:'',page:0,size:20,order:'id',dir:'DESC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
@@ -65,27 +66,27 @@ function renderSortIcons(){
 let t;
 for(const id of ['q','d1','d2'])document.getElementById(id).addEventListener('input',function(){clearTimeout(t);t=setTimeout(()=>{state.q=document.getElementById('q').value.trim();state.d1=document.getElementById('d1').value;state.d2=document.getElementById('d2').value;state.page=0;cargar();},300);});
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const p=`q=${encodeURIComponent(state.q)}&fecha_desde=${state.d1}&fecha_hasta=${state.d2}&limit=${PAGE_SIZE}&offset=${off}&order=${state.order}&dir=${state.dir}`;
+  const off=state.page*state.size;
+  const p=`q=${encodeURIComponent(state.q)}&fecha_desde=${state.d1}&fecha_hasta=${state.d2}&limit=${state.size}&offset=${off}&order=${state.order}&dir=${state.dir}`;
   try{
     const d=await api('tienda/compras.php?action=listar&'+p);
-    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,d.total)} de ${d.total}`:'';
+    document.getElementById('infoTotal').textContent=d.total>0?`Mostrando ${off+1}-${Math.min(off+state.size,d.total)} de ${d.total}`:'';
     renderSortIcons();
-    document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr>
-      <td><a href="${UI}modules/tienda/pages/detalle_compra?id=${a.id}" class="fw-semibold">#${a.id}</a></td>
+    document.getElementById('tbody').innerHTML=(d.rows||[]).map(a=>`<tr class="fila-link" onclick="location.href='${UI}modules/tienda/pages/detalle_compra?id=${a.id}'">
+      <td><a href="${UI}modules/tienda/pages/detalle_compra?id=${a.id}" onclick="event.stopPropagation()" class="fw-semibold">#${a.id}</a></td>
       <td>${esc(a.fecha_compra||'')}</td>
       <td class="text-center">${a.total_items}</td><td class="text-end">${a.total_cantidad}</td><td class="text-end">${money(a.total_valor)}</td>
       <td>${esc(String(a.fecha_creacion||'').replace('T',' '))}</td>
       <td class="text-end">
-        <a class="btn btn-sm btn-outline-primary" href="${UI}modules/tienda/pages/detalle_compra?id=${a.id}"><i class="fas fa-eye"></i></a>
-        <button class="btn btn-sm btn-outline-danger" onclick="eliminar(${a.id})"><i class="fas fa-trash"></i></button>
+        <a class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation()" href="${UI}modules/tienda/pages/detalle_compra?id=${a.id}"><i class="fas fa-eye"></i></a>
+        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();eliminar(${a.id})"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`).join('')||'<tr><td colspan="7" class="text-center text-muted">Sin resultados</td></tr>';
     renderPagination(d.total);
   }catch(e){showA(e.message,false);}
 }
 function renderPagination(total){
-  const N=Math.ceil(total/PAGE_SIZE), el=document.getElementById('paginacion'), C=state.page;
+  const N=Math.ceil(total/state.size), el=document.getElementById('paginacion'), C=state.page;
   if(N<=1){el.innerHTML='';return;}
   let pages=[]; if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h=''; if(C>0)h+=`<li class="page-item"><a class="page-link" href="#" onclick="go(${C-1})">«</a></li>`;
@@ -98,6 +99,7 @@ async function eliminar(id){
   if(!confirm('¿Eliminar la compra? Solo se eliminan compras sin unidades vendidas.'))return;
   try{await post('tienda/compras.php?action=eliminar&id='+id,{});cargar();showA('Compra eliminada.',true);}catch(e){showA(e.message,false);}
 }
+window.Listado.mountSize('fSizeBox', state, cargar);
 cargar();
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

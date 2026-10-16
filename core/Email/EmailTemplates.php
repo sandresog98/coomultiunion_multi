@@ -118,7 +118,7 @@ HTML;
     }
 
     /** Notificación al asociado: solicitud respondida. */
-    public static function solicitudRespondida(string $nombre, string $categoria, int $solicitudId, string $resultado, ?string $mensaje): string
+    public static function solicitudRespondida(string $nombre, string $categoria, int $solicitudId, string $resultado, ?string $mensaje, ?string $urlCalificar = null): string
     {
         $safeNombre  = htmlspecialchars($nombre ?: 'Asociado(a)');
         $safeCategoria = htmlspecialchars($categoria);
@@ -129,8 +129,14 @@ HTML;
             . self::detailBox('Respuesta', [
                 'Estado'  => $safeResultado,
                 'Mensaje' => $mensaje !== null && $mensaje !== '' ? $mensaje : '—',
-            ])
-            . '<p class="p">Cordial saludo,<br>Equipo Coomultiunion.</p>';
+            ]);
+        if ($urlCalificar !== null && $urlCalificar !== '') {
+            $safeUrl = htmlspecialchars($urlCalificar, ENT_QUOTES);
+            $contenido .= '<p class="p" style="text-align:center;margin:22px 0 8px">'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;background:#1384D2;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Calificar la atención</a></p>'
+                . '<p class="p" style="font-size:12px;color:#6b7280;text-align:center">Tu opinión nos ayuda a mejorar el servicio.</p>';
+        }
+        $contenido .= '<p class="p">Cordial saludo,<br>Equipo Coomultiunion.</p>';
         return self::base('Solicitud respondida', $contenido);
     }
 

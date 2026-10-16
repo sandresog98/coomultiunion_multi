@@ -14,7 +14,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-gift me-2"></i>Fondo de Bienestar — Convenios</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
     <?php if ($canCrear): ?>
     <button class="btn btn-light btn-sm" onclick="abrir()"><i class="fas fa-plus me-1"></i>Nuevo convenio</button>
     <?php endif; ?>
@@ -27,7 +30,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
       </div>
       <div class="col-auto">
         <label class="form-label small text-muted mb-0">Estado</label>
-        <select class="form-select" id="f_estado"><option value="">Todos</option><option value="1">Activos</option><option value="0">Inactivos</option></select>
+        <select class="form-select" id="f_estado" data-searchable><option value="">Todos</option><option value="1">Activos</option><option value="0">Inactivos</option></select>
       </div>
     </div>
     <div id="alert" class="alert d-none"></div>
@@ -90,11 +93,11 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 
 <script>
 window.API=<?php echo json_encode(apiUrl()); ?>;
-const PAGE_SIZE=20, alertBox=document.getElementById('alert'), L=window.Listado;
+const alertBox=document.getElementById('alert'), L=window.Listado;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDITAR=ACC['fondo_bienestar.convenios.editar']===true;
 const CAN_TOGGLE=ACC['fondo_bienestar.convenios.toggle']===true;
-let state={q:'',estado:'',page:0,order:'orden',dir:'ASC'}, editId=null, modal;
+let state={q:'',estado:'',page:0,size:20,order:'orden',dir:'ASC'}, editId=null, modal;
 
 const esc=L.esc, api=L.api, debounce=L.debounce;
 L.bindSort(document, state, cargar);
@@ -104,11 +107,11 @@ document.getElementById('q').addEventListener('input',debounce(()=>{state.q=docu
 document.getElementById('f_estado').addEventListener('change',()=>{state.estado=document.getElementById('f_estado').value;state.page=0;cargar();});
 
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
+  const off=state.page*state.size;
   try{
-    const d=await api('fondo_bienestar/listar?q='+encodeURIComponent(state.q)+'&estado='+state.estado+'&order='+state.order+'&dir='+state.dir+'&limit='+PAGE_SIZE+'&offset='+off);
+    const d=await api('fondo_bienestar/listar?q='+encodeURIComponent(state.q)+'&estado='+state.estado+'&order='+state.order+'&dir='+state.dir+'&limit='+state.size+'&offset='+off);
     const total=d.total||0;
-    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+state.size,total)} de ${total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>`<tr>
       <td><code>${esc(r.codigo)}</code></td>
@@ -127,7 +130,7 @@ async function cargar(){
     renderPagination(total);
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
-function renderPagination(t){document.getElementById('paginacion').innerHTML=L.paginacion(t,state.page,PAGE_SIZE);}
+function renderPagination(t){document.getElementById('paginacion').innerHTML=L.paginacion(t,state.page,state.size);}
 function goPage(p){state.page=p;cargar();}
 
 function abrir(r){
@@ -190,6 +193,6 @@ async function toggle(r){
   catch(e){alert(e.message);}
 }
 
-document.addEventListener('DOMContentLoaded',()=>{modal=new bootstrap.Modal('#m');cargar();});
+document.addEventListener('DOMContentLoaded',()=>{modal=new bootstrap.Modal('#m');L.mountSize('fSizeBox', state, cargar);cargar();});
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

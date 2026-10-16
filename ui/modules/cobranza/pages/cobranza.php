@@ -29,26 +29,29 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-phone me-2"></i>Cobranza unificada</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
   </div>
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto"><label class="form-label small text-muted mb-0">Tipo de mora</label>
-        <select class="form-select" id="fTipoMora" style="width:140px"><option value="">Ambos</option><option value="credito">Crédito</option><option value="aportes">Aportes</option></select>
+        <select class="form-select" id="fTipoMora" data-searchable style="width:140px"><option value="">Ambos</option><option value="credito">Crédito</option><option value="aportes">Aportes</option></select>
       </div>
       <div class="col-auto" style="max-width:300px"><label class="form-label small text-muted mb-0">Buscar</label>
         <div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input class="form-control" id="q" placeholder="Cédula, nombre, tel, email…"></div>
       </div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Banda</label>
-        <select class="form-select" id="fBanda" style="width:150px"><option value="">Todas</option>
+        <select class="form-select" id="fBanda" data-searchable style="width:150px"><option value="">Todas</option>
           <option value="persuasiva" data-tipo="credito">Persuasiva</option><option value="prejuridico" data-tipo="credito">Prejurídico</option><option value="juridico" data-tipo="credito">Jurídico</option>
           <option value="30_60" data-tipo="aportes">Aportes 30-60</option><option value="61_90" data-tipo="aportes">Aportes 61-90</option><option value="90_mas" data-tipo="aportes">Aportes 91+</option></select>
       </div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Última comunicación</label>
-        <select class="form-select" id="fRango" style="width:170px"><option value="">Todos</option><option value="sin">Sin comunicación</option><option value="muy_reciente">Muy reciente</option><option value="reciente">Reciente</option><option value="intermedia">Intermedia</option><option value="lejana">Lejana</option><option value="muy_lejana">Muy lejana</option></select>
+        <select class="form-select" id="fRango" data-searchable style="width:170px"><option value="">Todos</option><option value="sin">Sin comunicación</option><option value="muy_reciente">Muy reciente</option><option value="reciente">Reciente</option><option value="intermedia">Intermedia</option><option value="lejana">Lejana</option><option value="muy_lejana">Muy lejana</option></select>
       </div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Compromiso</label>
-        <select class="form-select" id="fCompromiso" style="width:150px"><option value="">Todos</option><option value="cumplido">Cumplido</option><option value="incumplido">Incumplido</option><option value="pendiente_tiempo">Pendiente</option><option value="sin">Sin compromiso</option></select>
+        <select class="form-select" id="fCompromiso" data-searchable style="width:150px"><option value="">Todos</option><option value="cumplido">Cumplido</option><option value="incumplido">Incumplido</option><option value="pendiente_tiempo">Pendiente</option><option value="sin">Sin compromiso</option></select>
       </div>
       <div class="col-auto" style="padding-bottom:6px"><div class="form-check"><input class="form-check-input" type="checkbox" id="fSoloRem"><label class="form-check-label" for="fSoloRem">Solo remitidos a jurídica</label></div></div>
     </div>
@@ -106,12 +109,12 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 .KPI .card-body{padding:.6rem .4rem}
 </style>
 <script>
-const API=<?php echo json_encode(apiUrl()); ?>, U=<?php echo json_encode(uiBaseUrl()); ?>, PAGE_SIZE=20, alertBox=document.getElementById('alert');
+const API=<?php echo json_encode(apiUrl()); ?>, U=<?php echo json_encode(uiBaseUrl()); ?>, alertBox=document.getElementById('alert');
 const SEC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_COMUNICAR=SEC['cobranza.lista.comunicar']===true;
 const CAN_INDAGAR  =SEC['cobranza.lista.indagar']===true;
 const CAN_REMJUR   =SEC['cobranza.lista.remitir_juridica']===true;
-let state={tipoMora:'',q:'',banda:'',rango:'',compromiso:'',soloRem:false,page:0,order:'dias',dir:'DESC'};
+let state={tipoMora:'',q:'',banda:'',rango:'',compromiso:'',soloRem:false,page:0,size:20,order:'dias',dir:'DESC'};
 let debounceTimer, modalCom, modalInd;
 const BANDA={persuasiva:['Persuasiva','primary'],prejuridico:['Prejurídico','warning'],juridico:['Jurídico','danger'],'30_60':['30–60 días','primary'],'61_90':['61–90 días','warning'],'90_mas':['91+ días','danger']};
 const COMP={pendiente_tiempo:['Pendiente','warning'],cumplido:['Cumplido','success'],incumplido:['Incumplido','danger']};
@@ -137,8 +140,9 @@ document.getElementById('fSoloRem').addEventListener('change',function(){state.s
 document.getElementById('fTipoMora').addEventListener('change',function(){
   const t=this.value,sel=document.getElementById('fBanda');
   Array.from(sel.options).forEach(o=>{ if(o.value==='') return; o.disabled = (t!=='' && o.dataset.tipo!==t); });
+  window.Listado.refreshSelect(sel);
   if(sel.value && sel.value!=='' && t!=='' && sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].dataset.tipo!==t){
-    sel.value=''; state.banda=''; cargar();
+    window.Listado.setSelect(sel,''); state.banda=''; cargar();
   }
 });
 
@@ -151,20 +155,20 @@ async function cargarKPIs(){
 }
 
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
-  const bs=`tipo_mora=${state.tipoMora}&q=${encodeURIComponent(state.q)}&banda=${state.banda}&rango=${state.rango}&compromiso=${state.compromiso}&solo_remitidos=${state.soloRem}`+`&order=${state.order}&dir=${state.dir}&limit=${PAGE_SIZE}&offset=${off}`;
+  const off=state.page*state.size;
+  const bs=`tipo_mora=${state.tipoMora}&q=${encodeURIComponent(state.q)}&banda=${state.banda}&rango=${state.rango}&compromiso=${state.compromiso}&solo_remitidos=${state.soloRem}`+`&order=${state.order}&dir=${state.dir}&limit=${state.size}&offset=${off}`;
   try{
     alertBox.classList.add('d-none');
     const d=await api('cobranza/listar?'+bs);
     const total=d.total||0;
-    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+state.size,total)} de ${total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       const bd=BANDA[r.banda]||[r.banda,'secondary'];
       const comp=r.compromiso?(COMP[r.compromiso.estado_compromiso]||['—','secondary']):null;
       const rem=r.remitido_juridica==1?'<span class="badge text-bg-danger" data-tip="desde '+fmtDt(r.fecha_remision)+'">Sí</span>':'<span class="badge text-bg-secondary">No</span>';
       const tip=r.tipo_mora==='credito'?'<span class="badge text-bg-info">Crédito</span>':'<span class="badge text-bg-secondary">Aportes</span>';
-      return `<tr>
+      return `<tr class="fila-link" onclick="location.href='${U}modules/asociados/pages/asociados_detalle?cedula=${encodeURIComponent(r.cedula)}'">
         <td><span class="fw-semibold">${esc(r.nombre||r.cedula)}</span><br><small class="text-muted">CC ${esc(r.cedula)}</small></td>
         <td>${tip}</td>
         <td class="text-end"><strong>${r.dias}</strong>${r.tipo_mora==='credito'?'': '<small class="text-muted d-block">sin aporte</small>'}</td>
@@ -174,16 +178,16 @@ async function cargar(){
         <td>${comp? '<span class="badge text-bg-'+comp[1]+'">'+comp[0]+'</span>'+ (r.compromiso.suma_pagado>0?' <small class="text-muted">$'+Number(r.compromiso.suma_pagado).toLocaleString('es-CO')+'</small>':''):'—'}</td>
         <td class="text-center">${rem}</td>
         <td class="text-end text-nowrap">
-          ${CAN_COMUNICAR?`<button class="btn btn-sm btn-outline-primary" title="Comunicar" onclick='comunicar(${JSON.stringify(r)})'><i class="fas fa-phone"></i></button>`:''}
-          ${CAN_INDAGAR?`<button class="btn btn-sm btn-outline-secondary" title="Indagación" onclick='indagar(${JSON.stringify(r)})'><i class="fas fa-search"></i></button>`:''}
-          ${CAN_REMJUR&&r.tipo_mora==='credito'?`<button class="btn btn-sm ${r.remitido_juridica==1?'btn-outline-success':'btn-outline-danger'}" title="${r.remitido_juridica==1?'Quitar remisión':'Remitir a jurídica'}" onclick='toggleRemision(${JSON.stringify(r)})'><i class="fas ${r.remitido_juridica==1?'fa-ban':'fa-gavel'}"></i></button>`:''}
-          <a class="btn btn-sm btn-outline-info" title="Ver detalle" href="${U}modules/asociados/pages/asociados_detalle?cedula=${encodeURIComponent(r.cedula)}"><i class="fas fa-eye"></i></a>
+          ${CAN_COMUNICAR?`<button class="btn btn-sm btn-outline-primary" title="Comunicar" onclick='event.stopPropagation();comunicar(${JSON.stringify(r)})'><i class="fas fa-phone"></i></button>`:''}
+          ${CAN_INDAGAR?`<button class="btn btn-sm btn-outline-secondary" title="Indagación" onclick='event.stopPropagation();indagar(${JSON.stringify(r)})'><i class="fas fa-search"></i></button>`:''}
+          ${CAN_REMJUR&&r.tipo_mora==='credito'?`<button class="btn btn-sm ${r.remitido_juridica==1?'btn-outline-success':'btn-outline-danger'}" title="${r.remitido_juridica==1?'Quitar remisión':'Remitir a jurídica'}" onclick='event.stopPropagation();toggleRemision(${JSON.stringify(r)})'><i class="fas ${r.remitido_juridica==1?'fa-ban':'fa-gavel'}"></i></button>`:''}
+          <a class="btn btn-sm btn-outline-info" title="Ver detalle" onclick="event.stopPropagation()" href="${U}modules/asociados/pages/asociados_detalle?cedula=${encodeURIComponent(r.cedula)}"><i class="fas fa-eye"></i></a>
         </td></tr>`;
     }).join('')||'<tr><td colspan="9" class="text-center text-muted">Sin resultados</td></tr>';
     renderPagination(total);
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
-function renderPagination(t){const N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
+function renderPagination(t){const N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
   const C=state.page;let pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
   let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);
   pages.forEach(p=>{if(p==='...')h.push(`<li class="page-item disabled"><span class="page-link">…</span></li>`);else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});
@@ -264,6 +268,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   modalCom=new bootstrap.Modal('#mCom');modalInd=new bootstrap.Modal('#mInd');
   const qp=new URLSearchParams(location.search).get('q');
   if(qp){document.getElementById('q').value=qp;state.q=qp;}
+  window.Listado.mountSize('fSizeBox', state, cargar);
   cargarTiposComm();cargarKPIs();cargar();
 });
 </script>

@@ -44,8 +44,8 @@ function parHtml(sol, apr, moneyFmt){
         {label:'Fecha', val:function(s){return cxFecha(s.fecha_creacion);}},
         {label:'Acciones', sort:false, val:function(){return '';}, html:function(s){
           var pendAceptar=((s.aceptado_por_asociado===null) && (s.etapa_actual==='creacion'||s.etapa_actual==='revision'));
-          return '<a class="btn btn-sm btn-portal-outline" href="'+CX_BASE+'/modules/solicitud_credito/pages/documentos?id='+s.id+'">Documentos</a>'
-            +(pendAceptar?' <a class="btn btn-sm btn-portal-accent" href="'+CX_BASE+'/modules/solicitud_credito/pages/aceptar?id='+s.id+'">Autorizar</a>':'');
+          return '<a class="btn btn-sm btn-portal-outline" href="'+cxUrl('solicitar-credito/{id}',{id:s.id})+'">Documentos</a>'
+            +(pendAceptar?' <a class="btn btn-sm btn-portal-accent" href="'+cxUrl('solicitar-credito/aceptar/{id}',{id:s.id})+'">Autorizar</a>':'');
         }},
       ],
       filas:rows

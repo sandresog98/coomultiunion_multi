@@ -39,12 +39,12 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
           </div>
           <div class="col-auto">
             <label class="form-label small text-muted mb-0">Estado</label>
-            <select class="form-select form-select-sm" id="fEstC">
+            <select class="form-select form-select-sm" id="fEstC" data-searchable>
               <option value="">Todos</option><option value="1">Activos</option><option value="0">Inactivos</option>
             </select>
           </div>
         </div>
-        <div class="mb-2"><span class="badge text-bg-info" id="infoTotalC">Mostrando 0-0 de 0</span></div>
+        <div class="mb-2 d-flex align-items-center gap-2"><span class="badge text-bg-info" id="infoTotalC">Mostrando 0-0 de 0</span><span id="fSizeC"></span></div>
         <div class="table-responsive">
           <table class="table table-hover align-middle">
             <thead><tr>
@@ -66,11 +66,11 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
         <div class="row g-2 mb-3 align-items-end">
           <div class="col-auto">
             <label class="form-label small text-muted mb-0">Convenio</label>
-            <select class="form-select form-select-sm" id="fConvP"><option value="0">Todos</option></select>
+            <select class="form-select form-select-sm" id="fConvP" data-searchable><option value="0">Todos</option></select>
           </div>
           <div class="col-auto">
             <label class="form-label small text-muted mb-0">Tipo</label>
-            <select class="form-select form-select-sm" id="fTipoP">
+            <select class="form-select form-select-sm" id="fTipoP" data-searchable>
               <option value="">Todos</option><option value="beneficio">Beneficio</option><option value="boleta">Boleta (con stock)</option>
             </select>
           </div>
@@ -79,7 +79,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
             <input class="form-control form-control-sm" id="qP" placeholder="Nombre, convenio">
           </div>
         </div>
-        <div class="mb-2"><span class="badge text-bg-info" id="infoTotalP">Mostrando 0-0 de 0</span></div>
+        <div class="mb-2 d-flex align-items-center gap-2"><span class="badge text-bg-info" id="infoTotalP">Mostrando 0-0 de 0</span><span id="fSizeP"></span></div>
         <div class="table-responsive">
           <table class="table table-hover align-middle">
             <thead><tr>
@@ -160,13 +160,13 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 </div>
 
 <script>
-const API = <?php echo json_encode(apiUrl()); ?>, PAGE_SIZE = 20;
+const API = <?php echo json_encode(apiUrl()); ?>;
 const ACC = <?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['convenios.index.editar']===true,CAN_TOGGLE=ACC['convenios.index.toggle']===true,CAN_ELIM=ACC['convenios.index.eliminar']===true;
 const alertBox = document.getElementById('alert');
 let modalConv, modalProd, debounceC, debounceP;
-let stC = { q:'', est:'', page:0, order:'nombre', dir:'ASC' };
-let stP = { conv:0, tipo:'', q:'', page:0, order:'nombre', dir:'ASC' };
+let stC = { q:'', est:'', page:0, size:20, order:'nombre', dir:'ASC' };
+let stP = { conv:0, tipo:'', q:'', page:0, size:20, order:'nombre', dir:'ASC' };
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
@@ -176,12 +176,14 @@ function post(path,data){return api(path,{method:'POST',headers:{'Content-Type':
 
 const SORTCOLS={'paneConv':stC,'paneProd':stP};
 document.querySelectorAll('.sortable').forEach(th=>th.addEventListener('click',()=>{
-  const pane=th.closest('.tab-pane').id,st=SORTCOLS[pane];
+  const tp=th.closest('.tab-pane');if(!tp)return;
+  const pane=tp.id,st=SORTCOLS[pane];if(!st)return;
   if(st.order===th.dataset.col)st.dir=st.dir==='ASC'?'DESC':'ASC';else{st.order=th.dataset.col;st.dir='ASC';}
   st.page=0;if(pane==='paneConv')cargarConvenios();else cargarProductos();
 }));
 function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{
-  const st=SORTCOLS[th.closest('.tab-pane').id];if(!st)return;
+  const tp=th.closest('.tab-pane');if(!tp)return;
+  const st=SORTCOLS[tp.id];if(!st)return;
   const col=th.dataset.col,a=st.order===col;th.classList.toggle('active',a);
   const txt=th.textContent.trim().replace(/[▲▼]/g,'');
   th.innerHTML=txt+(a?` <span class="sort-icon">${st.dir==='ASC'?'▲':'▼'}</span>`:'');
@@ -189,10 +191,10 @@ function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{
 
 async function cargarConvenios(){
   try{
-    const off=stC.page*PAGE_SIZE;
-    const d=await api(`convenios/listar?ent=convenios&q=${encodeURIComponent(stC.q)}&estado=${stC.est}&order=${stC.order}&dir=${stC.dir}&limit=${PAGE_SIZE}&offset=${off}`);
+    const off=stC.page*stC.size;
+    const d=await api(`convenios/listar?ent=convenios&q=${encodeURIComponent(stC.q)}&estado=${stC.est}&order=${stC.order}&dir=${stC.dir}&limit=${stC.size}&offset=${off}`);
     const total=d.total||0;
-    document.getElementById('infoTotalC').textContent=total?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotalC').textContent=total?`Mostrando ${off+1}-${Math.min(off+stC.size,total)} de ${total}`:'';
     document.getElementById('tbodyC').innerHTML=(d.rows||[]).map(c=>`
       <tr>
         <td>${c.imagen?`<img src="${API}convenios/serve_imagen?ent=convenio&id=${c.id}" style="width:56px;height:40px;object-fit:cover;border-radius:6px" onerror="this.style.display='none'">`:''}</td>
@@ -211,10 +213,10 @@ async function cargarConvenios(){
 }
 async function cargarProductos(){
   try{
-    const off=stP.page*PAGE_SIZE;
-    const d=await api(`convenios/listar?ent=productos&convenio_id=${stP.conv}&tipo=${stP.tipo}&q=${encodeURIComponent(stP.q)}&order=${stP.order}&dir=${stP.dir}&limit=${PAGE_SIZE}&offset=${off}`);
+    const off=stP.page*stP.size;
+    const d=await api(`convenios/listar?ent=productos&convenio_id=${stP.conv}&tipo=${stP.tipo}&q=${encodeURIComponent(stP.q)}&order=${stP.order}&dir=${stP.dir}&limit=${stP.size}&offset=${off}`);
     const total=d.total||0;
-    document.getElementById('infoTotalP').textContent=total?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotalP').textContent=total?`Mostrando ${off+1}-${Math.min(off+stP.size,total)} de ${total}`:'';
     document.getElementById('tbodyP').innerHTML=(d.rows||[]).map(p=>`
       <tr>
         <td><strong>${esc(p.nombre)}</strong></td>
@@ -234,7 +236,7 @@ async function cargarProductos(){
   }catch(e){showAlert(e.message);}
 }
 function renderPagination(id,total,state){
-  const N=Math.ceil(total/PAGE_SIZE),el=document.getElementById(id);
+  const N=Math.ceil(total/state.size),el=document.getElementById(id);
   if(N<=1){el.innerHTML='';return;}
   let C=state.page,h=[];
   if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="go('${id}',${C-1})">«</a></li>`);
@@ -341,6 +343,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('fTipoP').addEventListener('change',function(){stP.tipo=this.value;stP.page=0;cargarProductos();});
   document.getElementById('tabProd').addEventListener('click',()=>document.getElementById('btnNuevoProducto').classList.remove('d-none'));
   document.getElementById('tabConv').addEventListener('click',()=>document.getElementById('btnNuevoProducto').classList.add('d-none'));
+  window.Listado.mountSize('fSizeC', stC, cargarConvenios, {id:'fSizeC', class:'small text-muted'});
+  window.Listado.mountSize('fSizeP', stP, cargarProductos, {id:'fSizeP', class:'small text-muted'});
   cargarConveniosSel().then(()=>{cargarConvenios();cargarProductos();});
 });
 </script>

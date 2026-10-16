@@ -13,7 +13,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-tags me-2"></i>Tipos de movimiento</span>
-    <span class="small text-white-50" id="infoTotal"></span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="small text-white-50" id="infoTotal"></span>
+      <span id="fSizeBox"></span>
+    </span>
     <?php if ($canCrear): ?>
     <button class="btn btn-light btn-sm" onclick="abrir()"><i class="fas fa-plus me-1"></i>Nuevo</button>
     <?php endif; ?>
@@ -61,10 +64,10 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 
 
 <script>
-const API=<?php echo json_encode(apiUrl()); ?>, PAGE_SIZE=20, alertBox=document.getElementById('alert');
+const API=<?php echo json_encode(apiUrl()); ?>, alertBox=document.getElementById('alert');
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['movimientos_tipos.editar']===true,CAN_ELIM=ACC['movimientos_tipos.eliminar']===true;
-let state={q:'',page:0,order:'nombre',dir:'ASC'}, editTipo=null, modal, debounceTimer;
+let state={q:'',page:0,size:20,order:'nombre',dir:'ASC'}, editTipo=null, modal, debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
@@ -88,11 +91,11 @@ function renderSortIcons(){
 document.getElementById('q').addEventListener('input',()=>{clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>{state.q=document.getElementById('q').value.trim();state.page=0;cargar();},300);});
 
 async function cargar(){
-  const off=state.page*PAGE_SIZE;
+  const off=state.page*state.size;
   try{
-    const d=await api('movimientos_tipos/listar?q='+encodeURIComponent(state.q)+'&order='+state.order+'&dir='+state.dir+'&limit='+PAGE_SIZE+'&offset='+off);
+    const d=await api('movimientos_tipos/listar?q='+encodeURIComponent(state.q)+'&order='+state.order+'&dir='+state.dir+'&limit='+state.size+'&offset='+off);
     const total=d.total||0;
-    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+PAGE_SIZE,total)} de ${total}`:'';
+    document.getElementById('infoTotal').textContent=total>0?`Mostrando ${off+1}-${Math.min(off+state.size,total)} de ${total}`:'';
     renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>`<tr>
       <td><code>${esc(r.tipo)}</code></td>
@@ -110,7 +113,7 @@ async function cargar(){
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
 function renderPagination(t){
-  const N=Math.ceil(t/PAGE_SIZE);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
+  const N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}
   const C=state.page;let pages=[];
   if(N<=10){for(let i=0;i<N;i++)pages.push(i);}
   else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}
@@ -163,6 +166,6 @@ async function toggle(r){
   catch(e){alert(e.message);}
 }
 
-document.addEventListener('DOMContentLoaded',()=>{modal=new bootstrap.Modal('#m');cargar();});
+document.addEventListener('DOMContentLoaded',()=>{modal=new bootstrap.Modal('#m');window.Listado.mountSize('fSizeBox', state, cargar);cargar();});
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

@@ -17,6 +17,13 @@
     RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI}.php -f
     RewriteRule ^ %{REQUEST_URI}.php [L]
 
+    # 2b) Portal CX: URLs amigables (/cx/<slug>) -> front controller.
+    #     Solo si NO es un archivo/carpeta real (no afecta assets, API ni las
+    #     URLs largas antiguas, que son archivos físicos y las resuelve la regla 2).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^cx/(.*)$ cx/router.php [L,QSA]
+
     # 3) Los uploads SOLO se sirven por API autenticada (nunca ruta directa).
     #    Los endpoints de descarga usan readfile() (api/...), no /uploads.
     RewriteRule ^uploads(/|$) - [F,L]

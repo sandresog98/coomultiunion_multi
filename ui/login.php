@@ -2,6 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/config/paths.php';
 require_once dirname(__DIR__) . '/core/Auth.php';
+require_once dirname(__DIR__) . '/core/env.php';
+$__env      = app_env();
+$__envClass = 'env-' . preg_replace('/[^a-z0-9_-]/i', '', $__env);
+$__envLabel = env_label();
 // Si ya hay sesión, al dashboard.
 if (Auth::staff() !== null) {
     header('Location: ' . uiBaseUrl() . 'index');
@@ -20,7 +24,7 @@ if (Auth::staff() !== null) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <link href="<?php echo assetUrl('css/common.css'); ?>" rel="stylesheet">
 </head>
-<body class="brand-gradient">
+<body class="brand-gradient <?php echo $__envClass; ?>">
 <div class="login-wrap">
   <div class="card login-card border-0 shadow">
     <div class="brand-accent"></div>
@@ -29,6 +33,9 @@ if (Auth::staff() !== null) {
         <img src="<?php echo assetUrl('img/logo.png'); ?>" alt="Multi App" class="mb-3" style="height:92px;width:92px;object-fit:contain;">
         <div class="fw-brand fs-3 text-brand">Multi App</div>
         <small class="text-muted">Interfaz administrativa</small>
+        <?php if ($__envLabel !== ''): ?>
+        <div class="mt-2"><span class="env-badge"><?php echo $__envLabel; ?></span></div>
+        <?php endif; ?>
       </div>
       <div id="alert" class="alert alert-danger d-none" role="alert"></div>
       <form id="loginForm">
