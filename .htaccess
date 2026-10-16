@@ -1,0 +1,31 @@
+# multi_app_v2 — URLs limpias (sin .php visible)
+# Requiere Apache + mod_rewrite (XAMPP lo trae activo).
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1) Redirigir a la URL LIMPIA cuando el navegador pide una página .php de la UI
+    #    o del portal de asociados (cx/). Solo GET y solo esas rutas -> NO afecta
+    #    las llamadas API (POST /api/*.php).
+    RewriteCond %{REQUEST_METHOD} =GET
+    RewriteCond %{THE_REQUEST} \s([^\s?]*/(ui|cx)/[^\s?]+)\.php[\s?] [NC]
+    RewriteRule ^ %1 [R=301,L]
+
+    # 2) Internamente, servir <ruta>.php cuando se pide <ruta> sin extensión.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI}.php -f
+    RewriteRule ^ %{REQUEST_URI}.php [L]
+
+    # 3) Los uploads SOLO se sirven por API autenticada (nunca ruta directa).
+    #    Los endpoints de descarga usan readfile() (api/...), no /uploads.
+    RewriteRule ^uploads(/|$) - [F,L]
+</IfModule>
+
+# No servir el .env ni archivos sensibles
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+# No listar directorios (uploads, etc.)
+Options -Indexes

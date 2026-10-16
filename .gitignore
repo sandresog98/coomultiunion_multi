@@ -1,0 +1,40 @@
+# Entorno / secretos
+.env
+
+# Uploads (contenido en runtime)
+uploads/*
+!uploads/.gitkeep
+
+# Dependencias vendorizadas grandes (si aplica)
+# utils/vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (migrador) — caché
+__pycache__/
+*.pyc
+
+# Datos de prueba (XLS Sifone) — no versionar
+_data/
+
+# Dumps de base de datos con datos reales (NUNCA versionar: solo DDL)
+sql/dumps/
+
+# Salidas de graphify en el corpus
+graphify-out/
+
+# Credenciales de producción puntuales
+.prod
+*.prod
+
+# Documentación operativa / de despliegue (NO versionar; la técnica sí: README.md, migracion_datos.md)
+MIGRACION_PRODUCCION.md
+**/MIGRACION_PRODUCCION.md
+*_PRODUCCION.md
+*DEPLOY*.md
+*RUNBOOK*.md
+*DEPLOYMENT*.md
+deployment/
+artifacts/

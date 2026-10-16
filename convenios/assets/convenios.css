@@ -1,0 +1,418 @@
+/* ============================================================
+   Convenios público (B15/B10) — estilos curados (adaptados de la tienda)
+   Inspirado en el legacy `tienda/assets/css/freshcart.css` +
+   `falling-pattern.css`. Trae solo lo que usa la tienda.
+   ============================================================ */
+:root {
+  --cv-bg: var(--front-bg);
+  --cv-ink: var(--front-ink);
+  --cv-muted: var(--front-muted);
+  --cv-brand: var(--brand-blue);
+  --cv-brand-dark: var(--brand-blue-dark);
+  --cv-yellow: var(--brand-yellow);
+  --cv-red: var(--brand-red);
+  --cv-green: var(--front-green);
+  --cv-line: var(--front-line);
+  --cv-card: var(--front-card);
+  --cv-radius: var(--front-radius);
+  --cv-shadow: var(--front-shadow);
+  --cv-shadow-lg: var(--front-shadow-lg);
+  --cv-font: var(--front-font);
+  --cv-fp: var(--front-fp);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--cv-font);
+  background: var(--cv-bg);
+  color: var(--cv-ink);
+  line-height: 1.5;
+}
+
+/* ---------- Cabecera ---------- */
+.cv-header {
+  position: sticky; top: 0; z-index: 1030;
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgba(17,70,138,.94), rgba(24,130,205,.94));
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(17,70,138,.25);
+}
+.cv-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; }
+.cv-brand img { height: 46px; max-width: 100%; object-fit: contain; background: #fff; border-radius: 10px; padding: 4px 8px; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.cv-brand .cv-brand-txt { display: flex; flex-direction: column; line-height: 1.05; }
+.cv-brand .cv-brand-txt b { font-weight: 800; font-size: 1rem; letter-spacing: .3px; }
+.cv-brand .cv-brand-txt span { font-size: .68rem; opacity: .82; white-space: nowrap; }
+
+.cv-search { flex: 1; max-width: 460px; margin: 0 auto; position: relative; }
+.cv-search input {
+  width: 100%; padding: 10px 14px 10px 40px; border: 0; border-radius: 999px;
+  font-family: inherit; font-size: .9rem; color: var(--cv-ink); outline: none;
+}
+.cv-search .cv-lupa { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--cv-muted); pointer-events: none; }
+
+.cv-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 0; cursor: pointer; font-family: inherit; font-weight: 700;
+  border-radius: 999px; padding: 9px 16px; font-size: .82rem; text-decoration: none;
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.cv-btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.cv-btn-primary { background: linear-gradient(135deg, var(--cv-brand), var(--cv-brand-dark)); color: #fff; font-weight: 600; padding: 9px 20px; border-radius: 8px; }
+.cv-btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(24,130,205,.35); }
+.cv-btn-ghost { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.cv-btn-wa { background: #25D366; color: #fff; }
+.cv-icon-btn {
+  width: 42px; height: 42px; border-radius: 12px; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.16); color: #fff; display: inline-flex;
+  align-items: center; justify-content: center; font-size: 1.05rem;
+}
+.cv-icon-btn:hover { background: rgba(255,255,255,.26); }
+
+/* ---------- Toolbar (filtros + orden) ---------- */
+.cv-toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  padding: 14px 16px; margin: 18px auto 8px; max-width: 1240px;
+  background: var(--cv-card); border: 1px solid var(--cv-line); border-radius: var(--cv-radius);
+  box-shadow: var(--cv-shadow);
+}
+.cv-filter-trigger {
+  display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid var(--cv-line); background: #fff; border-radius: 12px;
+  padding: 8px 12px; cursor: pointer; font-family: inherit; font-size: .8rem; text-align: left;
+}
+.cv-filter-trigger:hover { border-color: var(--cv-brand); }
+.cv-filter-trigger svg { color: var(--cv-brand); }
+.cv-filter-trigger .cv-txt label { display: block; font-size: .6rem; text-transform: uppercase; color: var(--cv-muted); letter-spacing: .6px; }
+.cv-filter-trigger .cv-txt { flex: 1; min-width: 0; }
+.cv-filter-trigger .cv-txt b { display: block; font-size: .8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-spacer { flex: 1; }
+
+/* Sort */
+.cv-sort { position: relative; }
+.cv-sort-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--cv-line); background: #fff; border-radius: 12px;
+  padding: 9px 12px; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600;
+}
+.cv-sort-btn:hover { border-color: var(--cv-brand); }
+.cv-sort-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); min-width: 230px; z-index: 1050;
+  background: #fff; border: 1px solid var(--cv-line); border-radius: 12px;
+  box-shadow: var(--cv-shadow-lg); padding: 6px; display: none;
+}
+.cv-sort-menu.is-open { display: block; }
+.cv-sort-opt {
+  display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+  font-family: inherit; font-size: .8rem; padding: 8px 10px; border-radius: 8px; color: var(--cv-ink);
+}
+.cv-sort-opt:hover { background: #eef3fa; }
+.cv-sort-opt.is-selected { background: #e7f0fa; color: var(--cv-brand-dark); font-weight: 600; }
+.cv-sort-opt .cv-dir { float: right; opacity: .6; }
+
+/* Chips */
+.cv-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 auto 4px; max-width: 1240px; padding: 0 16px; }
+.cv-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #e7f0fa; color: var(--cv-brand-dark); font-size: .76rem; font-weight: 600;
+  border-radius: 999px; padding: 5px 11px;
+}
+.cv-chip button { border: 0; background: none; cursor: pointer; color: var(--cv-brand); font-weight: 800; }
+
+/* ---------- Layout y grid ---------- */
+.cv-main { max-width: 1240px; margin: 0 auto; padding: 0 16px 30px; }
+.cv-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 768px)  { .cv-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 992px)  { .cv-grid--cols4 { grid-template-columns: repeat(4, 1fr); } }
+.cv-card {
+  background: var(--cv-card); border: 1px solid var(--cv-line); border-radius: var(--cv-radius);
+  overflow: hidden; box-shadow: var(--cv-shadow); display: flex; flex-direction: column;
+  transition: transform .18s ease, box-shadow .18s ease; position: relative;
+}
+.cv-card:hover { transform: translateY(-4px); box-shadow: var(--cv-shadow-lg); }
+.cv-card-img {
+  aspect-ratio: 16/9; background: linear-gradient(135deg,#eaf1fa,#f7fbfe);
+  display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;
+}
+.cv-card-img img { width: 100%; height: 100%; object-fit: cover; }
+.cv-card-img .cv-noimg { font-size: 3rem; color: #c4d3e6; }
+.cv-card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; flex: 1; }
+.cv-card-title { font-weight: 700; font-size: .95rem; line-height: 1.3; margin: 0 0 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cv-card-meta { color: var(--cv-muted); font-size: .7rem; margin-bottom: 8px; }
+.cv-price { font-weight: 800; font-size: .95rem; color: var(--cv-brand-dark); }
+.cv-price-promo { font-weight: 800; font-size: 1.02rem; color: var(--cv-green); }
+.cv-strike { color: var(--cv-muted); text-decoration: line-through; font-size: .74rem; font-weight: 400; margin-left: 5px; }
+.cv-tag-multi { font-size: .68rem; color: var(--cv-brand); background: #e7f0fa; border-radius: 999px; padding: 2px 8px; }
+.cv-card-actions { margin-top: auto; padding-top: 11px; border-top: 1px solid #eef2f8; display: flex; gap: 8px; }
+.cv-btn-detail { flex: 1; justify-content: center; }
+
+/* Badge promo */
+.cv-promo-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  background: var(--cv-green); color: #fff; font-weight: 800; font-size: .72rem;
+  border-radius: 999px; padding: 4px 11px;
+  animation: cv-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cv-pulse { 0%,100% { opacity: 1 } 50% { opacity: .72 } }
+
+/* ---------- Hojas (fondo patrón heredado de falling-pattern) ---------- */
+.cv-pattern-wrap { position: relative; overflow: hidden; }
+.cv-pattern {
+  position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image:
+    radial-gradient(28px 28px at 8% 18%, rgba(255,255,255,.14) 49%, transparent 51%),
+    radial-gradient(22px 22px at 30% 72%, rgba(255,255,255,.10) 49%, transparent 51%),
+    radial-gradient(34px 34px at 68% 30%, rgba(255,255,255,.10) 49%, transparent 51%),
+    radial-gradient(20px 20px at 88% 64%, rgba(255,255,255,.13) 49%, transparent 51%);
+  background-color: transparent;
+}
+
+/* ---------- Modal flotante (filtros categoría/marca y quick-view) ---------- */
+.cv-backdrop {
+  position: fixed; inset: 0; background: rgba(13,36,64,.5);
+  backdrop-filter: blur(2px); z-index: 2040; opacity: 0; visibility: hidden;
+  transition: opacity .2s ease, visibility .2s ease;
+}
+.cv-backdrop.is-open { opacity: 1; visibility: visible; }
+.cv-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-46%) scale(.97);
+  width: calc(100% - 28px); max-width: 420px; max-height: 82vh; overflow: auto;
+  background: #fff; border-radius: 18px; z-index: 2050;
+  box-shadow: var(--cv-shadow-lg); padding: 18px;
+  opacity: 0; visibility: hidden; transition: opacity .2s ease, transform .2s ease, visibility .2s ease;
+}
+.cv-modal.is-open { opacity: 1; visibility: visible; transform: translate(-50%,-50%) scale(1); }
+.cv-modal-lg { max-width: 820px; }
+.cv-modal h3 { margin: 0 0 12px; font-weight: 800; color: var(--cv-brand-dark); display: flex; align-items: center; gap: 8px; }
+.cv-modal-close {
+  position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 10px;
+  border: 0; background: #eef3fa; cursor: pointer; font-size: 1.05rem; color: var(--cv-ink);
+}
+.cv-opt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cv-opt-list li button {
+  display: block; width: 100%; text-align: left; border: 1px solid var(--cv-line);
+  background: #fff; border-radius: 11px; padding: 10px 13px; cursor: pointer; font-family: inherit;
+  font-size: .84rem; transition: border-color .12s, background .12s;
+}
+.cv-opt-list li button:hover { border-color: var(--cv-brand); }
+.cv-opt-list li button.is-selected { background: #e7f0fa; border-color: var(--cv-brand); font-weight: 600; color: var(--cv-brand-dark); }
+
+/* ---------- Rango de precio ---------- */
+.cv-price-range { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
+.cv-price-range input {
+  flex: 1; width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--cv-line); border-radius: 11px;
+  font-family: inherit; font-size: .78rem; outline: none;
+}
+.cv-price-range input:focus { border-color: var(--cv-brand); }
+
+/* ---------- Drawer móvil ---------- */
+.cv-drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; width: min(320px, 86vw);
+  background: #fff; z-index: 2050; padding: 18px; overflow: auto;
+  transform: translateX(-102%); transition: transform .22s ease;
+  box-shadow: var(--cv-shadow-lg);
+}
+.cv-drawer.is-open { transform: translateX(0); }
+.cv-drawer h3 { font-weight: 800; color: var(--cv-brand-dark); margin: 0 0 14px; }
+.cv-drawer .cv-field { margin-bottom: 14px; }
+.cv-drawer .cv-field label { display: block; font-size: .62rem; text-transform: uppercase; letter-spacing: .6px; color: var(--cv-muted); margin-bottom: 6px; }
+
+/* ---------- Paginación ---------- */
+.cv-pagination { display: flex; justify-content: center; gap: 5px; margin-top: 26px; }
+.cv-page {
+  min-width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--cv-line); background: #fff; color: var(--cv-ink); text-decoration: none;
+  border-radius: 10px; font-size: .82rem; font-weight: 600; cursor: pointer;
+}
+.cv-page:hover { border-color: var(--cv-brand); }
+.cv-page.is-active { background: var(--cv-brand-dark); color: #fff; border-color: var(--cv-brand-dark); }
+.cv-page.is-disabled { opacity: .4; pointer-events: none; }
+
+/* ---------- Quick view ---------- */
+.cv-qv-img { border-radius: 14px; overflow: hidden; aspect-ratio: 1/1; background: #eef3fa; display: flex; align-items: center; justify-content: center; }
+.cv-qv-img img { width: 100%; height: 100%; object-fit: cover; }
+.cv-qv-price { font-size: 1.7rem; font-weight: 800; color: var(--cv-brand-dark); }
+.cv-qv-price.verde { color: var(--cv-green); }
+
+/* ---------- Precios en detalle (formato legacy) ---------- */
+.cv-det-precio { margin-bottom: 1rem; }
+.cv-det-oferta { font-size: 1.55rem; font-weight: 800; color: var(--cv-green); margin-bottom: .25rem; }
+.cv-det-badge-oferta { font-size: .68em; font-weight: 700; background: var(--cv-green); color: #fff; padding: 2px 8px; border-radius: 6px; vertical-align: middle; }
+.cv-det-coop { font-size: 1rem; color: #212529; margin-bottom: .15rem; }
+.cv-det-coop-main { font-size: 1.5rem; font-weight: 800; color: var(--cv-brand-dark); }
+.cv-det-etiq { font-size: .75em; color: var(--cv-green); font-weight: 400; }
+.cv-det-comercial { text-decoration: line-through; color: #9ca3af; font-size: .95rem; }
+.cv-det-comercial .cv-det-etiq { text-decoration: none; }
+
+/* ---------- Footer ---------- */
+.cv-footer { color: var(--cv-muted); font-size: .8rem; padding: 24px 16px; text-align: center; }
+.cv-page-title { color: var(--cv-brand-dark); font-weight: 800; }
+
+@media (max-width: 640px) {
+  .cv-search { max-width: none; }
+  .cv-brand .cv-brand-txt span { display: none; }
+}
+
+/* ============================================================
+   1. Fondo animado "falling pattern" (portado del legacy, azul)
+   ============================================================ */
+.cv-falling-wrap {
+  position: fixed; inset: 0; z-index: 0; overflow: hidden;
+}
+.cv-falling {
+  position: absolute; inset: -2px; z-index: 0;
+  background-color: var(--cv-bg);
+  background-image:
+    radial-gradient(4px 100px at 0px 235px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 235px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 117.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 252px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 252px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 126px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 150px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 150px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 75px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 253px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 253px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 126.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 204px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 204px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 102px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 134px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 134px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 67px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 179px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 179px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 89.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 299px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 299px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 149.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 215px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 215px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 107.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 281px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 281px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 140.5px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 158px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 158px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 79px, var(--cv-fp) 100%, transparent 150%),
+    radial-gradient(4px 100px at 0px 210px, var(--cv-fp), transparent),
+    radial-gradient(4px 100px at 300px 210px, var(--cv-fp), transparent),
+    radial-gradient(1.5px 1.5px at 150px 105px, var(--cv-fp) 100%, transparent 150%);
+  background-size:
+    300px 235px, 300px 235px, 300px 235px, 300px 252px, 300px 252px, 300px 252px,
+    300px 150px, 300px 150px, 300px 150px, 300px 253px, 300px 253px, 300px 253px,
+    300px 204px, 300px 204px, 300px 204px, 300px 134px, 300px 134px, 300px 134px,
+    300px 179px, 300px 179px, 300px 179px, 300px 299px, 300px 299px, 300px 299px,
+    300px 215px, 300px 215px, 300px 215px, 300px 281px, 300px 281px, 300px 281px,
+    300px 158px, 300px 158px, 300px 158px, 300px 210px, 300px 210px, 300px 210px;
+  animation: cv-falling-anim 150s linear infinite;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 30%, var(--cv-bg) 85%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, transparent 30%, var(--cv-bg) 85%);
+}
+@keyframes cv-falling-anim {
+  0% { background-position: 0px 220px, 3px 220px, 151.5px 337.5px, 25px 24px, 28px 24px, 176.5px 150px, 50px 16px, 53px 16px, 201.5px 91px, 75px 224px, 78px 224px, 226.5px 230.5px, 100px 19px, 103px 19px, 251.5px 121px, 125px 120px, 128px 120px, 276.5px 187px, 150px 31px, 153px 31px, 301.5px 120.5px, 175px 235px, 178px 235px, 326.5px 384.5px, 200px 121px, 203px 121px, 351.5px 228.5px, 225px 224px, 228px 224px, 376.5px 364.5px, 250px 26px, 253px 26px, 401.5px 105px, 275px 75px, 278px 75px, 426.5px 180px; }
+  100% { background-position: 0px 6800px, 3px 6800px, 151.5px 6917.5px, 25px 13632px, 28px 13632px, 176.5px 13758px, 50px 5416px, 53px 5416px, 201.5px 5491px, 75px 17175px, 78px 17175px, 226.5px 17301.5px, 100px 5119px, 103px 5119px, 251.5px 5221px, 125px 8428px, 128px 8428px, 276.5px 8495px, 150px 9876px, 153px 9876px, 301.5px 9965.5px, 175px 13391px, 178px 13391px, 326.5px 13540.5px, 200px 14741px, 203px 14741px, 351.5px 14848.5px, 225px 18770px, 228px 18770px, 376.5px 18910.5px, 250px 5082px, 253px 5082px, 401.5px 5161px, 275px 6375px, 278px 6375px, 426.5px 6480px; }
+}
+.cv-falling-overlay {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  backdrop-filter: blur(.4em); -webkit-backdrop-filter: blur(.4em);
+  background-image: radial-gradient(circle at 50% 50%, transparent 0, transparent 2px, rgba(255,255,255,.4) 2px);
+  background-size: 8px 8px;
+}
+.cv-app { position: relative; z-index: 1; min-height: 100vh; }
+
+/* ============================================================
+   2. Búsqueda sugestiva (typewriter) — portado del legacy
+   ============================================================ */
+.cv-search-overlay {
+  position: absolute; left: 40px; right: 14px; top: 0; bottom: 0;
+  display: none; align-items: center; pointer-events: none; overflow: hidden; white-space: nowrap;
+}
+.cv-search.is-suggestive .cv-search-overlay { display: flex; }
+.cv-suggestive-inner {
+  display: inline-flex; align-items: center; overflow: hidden; white-space: nowrap;
+  width: 0; transition: width .5s linear;
+}
+.cv-suggestive-inner.is-typing, .cv-suggestive-inner.is-paused { transition-duration: 1.2s; }
+.cv-suggestive-inner.is-deleting { transition-duration: .3s; }
+.cv-suggestive-text { font-size: .82rem; color: var(--cv-muted); user-select: none; flex-shrink: 0; }
+
+/* ============================================================
+   3. Layout: sidebar izquierda + contenido
+   ============================================================ */
+.cv-layout { display: flex; gap: 22px; max-width: 1240px; margin: 0 auto; padding: 18px 16px 30px; align-items: flex-start; }
+.cv-sidebar {
+  width: 236px; flex-shrink: 0; background: var(--cv-card); border: 1px solid var(--cv-line);
+  border-radius: var(--cv-radius); box-shadow: var(--cv-shadow); padding: 16px;
+  position: sticky; top: 74px;
+}
+.cv-sidebar h3 { margin: 0 0 12px; font-weight: 800; font-size: .82rem; text-transform: uppercase; letter-spacing: .5px; color: var(--cv-brand-dark); }
+.cv-content { flex: 1; min-width: 0; }
+
+/* ============================================================
+   4. Logo Coomultiunion
+   ============================================================ */
+.cv-header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.cv-coop img { height: 42px; max-width: 100%; object-fit: contain; opacity: .95; }
+.cv-header .cv-coop img { background: #fff; border-radius: 10px; padding: 4px 8px; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.cv-footer .cv-coop { margin-top: 10px; }
+.cv-footer .cv-coop img { height: 30px; opacity: .85; }
+
+/* ============================================================
+   5. Chips de categorías rápidas (legacy) + pills activos
+   ============================================================ */
+.cv-qchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cv-qchip {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--cv-line); background: #fff; color: var(--cv-brand);
+  font: inherit; font-size: .78rem; font-weight: 600; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.04);
+  transition: box-shadow .3s, border-color .3s, background .3s, color .3s;
+}
+.cv-qchip:hover { border-color: hsla(203,100%,70%,.5); background: rgba(0,100,162,.06); }
+.cv-qchip.is-active { color: #fff; background: var(--cv-brand-dark); border-color: hsla(203,100%,80%,.2); }
+.cv-qchip svg { flex-shrink: 0; }
+.cv-chip { border: 1px solid var(--cv-line); }
+.cv-chip button { color: var(--cv-brand-dark); }
+
+/* ============================================================
+   6. Drawer: botón cerrar
+   ============================================================ */
+.cv-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.cv-drawer-head h3 { margin: 0; }
+.cv-drawer-close { width: 34px; height: 34px; border-radius: 10px; border: 0; background: #eef3fa; cursor: pointer; font-size: 1.05rem; color: var(--cv-ink); }
+
+@media (max-width: 767px) {
+  .cv-sidebar { display: none; }
+  .cv-layout { padding-top: 8px; }
+}
+
+/* ============================================================
+   7. Convenios — extras del módulo (hero, badges, links)
+   ============================================================ */
+.cv-hero { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-top:18px; }
+.cv-hero-img { width:100%; max-width:420px; border-radius:var(--cv-radius); overflow:hidden; box-shadow:var(--cv-shadow); }
+.cv-hero-img img { width:100%; display:block; }
+.cv-hero-img .cv-noimg { aspect-ratio:16/9; background:linear-gradient(135deg,#eaf1fa,#f7fbfe); display:flex; align-items:center; justify-content:center; font-size:4rem; color:#c4d3e6; }
+.cv-hero-body { flex:1; min-width:260px; }
+.cv-hero-body h2 { font-weight:800; color:var(--cv-brand-dark); }
+.cv-hero-desc { color:var(--cv-muted); font-size:.92rem; white-space:pre-line; max-width:640px; }
+.cv-chip-contact { display:inline-flex; align-items:center; gap:6px; background:#eef3fa; color:#40607f; font-size:.8rem; border-radius:999px; padding:5px 12px; margin:2px 4px 0 0; }
+
+.cv-card-desc { color:var(--cv-muted); font-size:.8rem; line-height:1.5; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.cv-badge-count {
+  position:absolute; top:10px; right:10px; z-index:2;
+  background:var(--cv-yellow); color:#1d2b3a; font-weight:700; font-size:.72rem;
+  border-radius:999px; padding:4px 10px;
+}
+.cv-card-link { text-decoration:none; color:inherit; display:flex; flex-direction:column; height:100%; }
+.cv-card-link:hover { color:inherit; }
+.cv-card-link .cv-card-actions { margin-top:auto; border-top:1px solid #eef2f8; padding-top:10px; display:flex; align-items:center; gap:6px; color:var(--cv-brand); font-weight:600; font-size:.78rem; }
+.cv-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; }
+.cv-empty { text-align:center; color:var(--cv-muted); padding:60px 16px; }
+.cv-empty i { font-size:3rem; display:block; margin-bottom:12px; opacity:.3; }

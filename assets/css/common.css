@@ -1,0 +1,68 @@
+/* multi_app_v2 — tema corporativo (Apéndice A 1.4/1.5)
+   Colores: #1882CD (azul) · #11468A (azul oscuro) · #FCD329 (amarillo) · #EB3031 (rojo)
+   Fuente: Poppins */
+:root {
+  --brand-blue: #1882CD;
+  --brand-blue-dark: #11468A;
+  --brand-yellow: #FCD329;
+  --brand-red: #EB3031;
+  --brand-bg: #f4f6f9;
+}
+
+* { font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+body { background: var(--brand-bg); }
+
+h1, h2, h3, h4, h5, .fw-brand { font-weight: 800; } /* Poppins ExtraBold en títulos */
+
+.brand-gradient { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); }
+.text-brand { color: var(--brand-blue-dark); }
+.btn-brand { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; font-weight: 600; }
+.btn-brand:hover { background: var(--brand-blue-dark); border-color: var(--brand-blue-dark); color: #fff; }
+.btn-brand:focus { box-shadow: 0 0 0 .25rem rgba(24,130,205,.3); }
+
+.navbar-brand-bar { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); }
+.sidebar { background: var(--brand-blue-dark); min-height: 100vh; }
+.sidebar .nav-link { color: rgba(255,255,255,.85); border-radius: .5rem; }
+.sidebar .nav-link:hover, .sidebar .nav-link.active { background: rgba(255,255,255,.12); color: #fff; }
+
+/* Chevron de los grupos: rota 180° cuando su collapse está abierto (Bootstrap añade .collapsed al toggler). */
+.sidebar [data-bs-toggle="collapse"] i.chev,
+#sidebarOffcanvas [data-bs-toggle="collapse"] i.chev { transition: transform .2s ease; }
+.sidebar [data-bs-toggle="collapse"]:not(.collapsed) i.chev,
+#sidebarOffcanvas [data-bs-toggle="collapse"]:not(.collapsed) i.chev { transform: rotate(180deg); }
+
+/* ── Accordion de historial (crear.php y transacciones_listar.php) ── */
+.hist-item { border-bottom: 1px solid #e9ecef; transition: background .15s; }
+.hist-item:hover { background: #f8f9fa; }
+.hist-header { cursor: pointer; padding: .55rem .75rem; }
+.hist-header[aria-expanded="true"] { background: #eef5fb; }
+.hist-chevron { transition: transform .25s ease; }
+.hist-header[aria-expanded="true"] .hist-chevron { transform: rotate(180deg); }
+
+.card { border: none; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,.06); }
+.card-header.brand { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); color: #fff; border-radius: 14px 14px 0 0 !important; font-weight: 600; }
+
+.login-wrap { min-height: 100vh; display: grid; place-items: center; }
+.login-card { width: 100%; max-width: 380px; }
+.brand-accent { height: 4px; background: linear-gradient(90deg, var(--brand-blue), var(--brand-yellow), var(--brand-red)); border-radius: 4px; }
+
+/* ── Mobile ── */
+@media (max-width: 767.98px) {
+  main.col-md-9 { width: 100% !important; margin-left: 0 !important; padding: 1rem !important; }
+  .table-responsive { font-size: 0.8rem; }
+}
+.sidebar.offcanvas .nav-link { color: rgba(255,255,255,.85); border-radius: .5rem; }
+.sidebar.offcanvas .nav-link:hover, .sidebar.offcanvas .nav-link.active { background: rgba(255,255,255,.12); color: #fff; }
+
+/* ── Paginación ── */
+.pagination { flex-wrap: wrap; }
+
+/* ── Ordenamiento de columnas (sortable) — centralizado (antes duplicado por página) ── */
+.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.sortable:hover { background: rgba(24,130,205,.1); }
+.sortable .sort-icon { font-size: .7rem; margin-left: 2px; color: #aaa; }
+.sortable.active .sort-icon { color: var(--brand-blue); }
+
+/* ── Ítems de resultados (autocomplete / listas) — centralizado ── */
+.res-item { cursor: pointer; }
+.res-item:hover { background: #e7f1fa; }
