@@ -14,5 +14,8 @@ if (!in_array($tipo, DescargasService::tipos(), true)) {
 
 $rep = $service->exportar($tipo, $start);
 
+Logger::descarga(Auth::actor()['id'] ?? null, 'oficina.descargas',
+    sprintf('Exportación tipo=%s (%d filas)', $tipo, max(0, count($rep['data']) - 1)));
+
 require_once dirname(__DIR__, 2) . '/utils/ExcelGenerator.php';
 ExcelGenerator::generateExcel($rep['data'], $rep['filename'], $rep['sheet'], $rep['widths']);

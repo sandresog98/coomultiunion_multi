@@ -63,6 +63,9 @@ if (!isset($CX_ROUTES)) {
         // Notificaciones
         'notificaciones'               => 'modules/notificaciones/pages/index.php',
 
+        // Asistente IA (chat)
+        'asistente'                    => 'modules/chat/pages/index.php',
+
         // Sesión / contraseña / calificación
         'login'                        => 'login.php',
         'logout'                       => 'logout.php',

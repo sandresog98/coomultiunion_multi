@@ -35,7 +35,7 @@ $TIPOS = ['estudiante','empleado_descuento_nomina','empleado_sin_descuento','ind
         </div>
         <div class="form-check mb-2">
           <input class="form-check-input" type="checkbox" id="acepta_tratamiento_datos" required>
-          <label class="form-check-label small" for="acepta_tratamiento_datos">Acepto el <b>tratamiento de datos personales</b> y consulta en centrales de riesgo <span class="text-danger">*</span></label>
+          <label class="form-check-label small" for="acepta_tratamiento_datos">Acepto el <b>tratamiento de datos personales</b> y consulta en centrales de riesgo <span class="text-danger">*</span> · <a href="<?= $APP ?>/privacidad" target="_blank" rel="noopener">Política de datos</a></label>
         </div>
         <div class="form-check mb-4">
           <input class="form-check-input" type="checkbox" id="acepta_ofertas_comerciales">

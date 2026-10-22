@@ -32,6 +32,9 @@ final class SifoneImporter
         'email' => 'ba', 'celular' => 'bb',
     ];
 
+    // Llaves de datacredito que hay que normalizar al ancho del resto del esquema (10).
+    private const DATACREDITO_LLAVES = ['cedula', 'numero_credito'];
+
     public function __construct(private ?PDO $db = null)
     {
         $this->db = $db ?? db();
@@ -110,6 +113,9 @@ final class SifoneImporter
                         $val = $this->fechaMasUnMes($val); // lógica de la vista legacy
                     }
                     $rec[$col] = $this->limpiar($val, $tipos[$col] ?? 'varchar');
+                    if (in_array($col, self::DATACREDITO_LLAVES, true)) {
+                        $rec[$col] = $this->normalizarLlave($rec[$col]);
+                    }
                 }
             } else { // header: columna BD == encabezado del Excel
                 foreach ($tipos as $col => $tipoDato) {
@@ -251,5 +257,16 @@ final class SifoneImporter
         if (is_numeric($val)) { return (string) $val; }
         $s = preg_replace('/[^\d\.\-]/', '', (string) $val);
         return $s === '' || $s === '-' ? null : $s;
+    }
+
+    /**
+     * Normaliza las llaves de datacredito (cedula, numero_credito) al ancho de 10 que
+     * usa el resto del esquema (sifone_asociados/estado_cuenta/cartera). Sifone las trae
+     * sin ceros a la izquierda, por eso fallaban los joins por igualdad de string.
+     */
+    private function normalizarLlave(mixed $val): ?string
+    {
+        $s = trim((string) $val);
+        return $s === '' ? null : str_pad($s, 10, '0', STR_PAD_LEFT);
     }
 }

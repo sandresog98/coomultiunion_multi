@@ -44,4 +44,6 @@ if (!move_uploaded_file($file['tmp_name'], $destino)) {
 }
 
 $ruta = $rel . '/' . $nombre;
+Logger::log('subir', 'asociados.detalle', Auth::actor()['id'] ?? null,
+    'Adjunto ' . $nombre . ' (' . strtoupper($ext) . ', ' . number_format((int) $file['size']) . ' B) → ' . $ruta);
 Http::ok(['ruta' => $ruta, 'nombre' => $nombre]);

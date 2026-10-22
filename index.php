@@ -19,6 +19,7 @@ $apps = [
     ['url' => 'simulador/',        'label' => 'Simulador de crédito',    'desc' => 'Calcula tu plan de pagos de forma pública.',            'icon' => '📈', 'color' => '#1882CD'],
     ['url' => 'convenios/',        'label' => 'Convenios',               'desc' => 'Catálogo de beneficios y aliados.',                     'icon' => '🤝', 'color' => '#EB3031'],
     ['url' => 'tienda/',           'label' => 'Tienda',                  'desc' => 'Catálogo de productos con promociones.',               'icon' => '🛒', 'color' => '#FCD329'],
+    ['url' => 'api-docs/',         'label' => 'API para integraciones',  'desc' => 'Documentación de endpoints autorizados (token Bearer · curl/Postman).', 'icon' => '🔌', 'color' => '#11468A'],
 ];
 // Rutas RELATIVAS: cada app es una carpeta hermana del index raíz (robusto en subdirectorio).
 ?>
@@ -68,6 +69,6 @@ $apps = [
       </a>
     <?php endforeach; ?>
   </div>
-  <div class="foot">© <?php echo date('Y'); ?> Coopmultiactiva · Selecciona una aplicación para continuar.</div>
+  <div class="foot">© <?php echo date('Y'); ?> Coopmultiactiva · <a href="privacidad" style="color:#dbe7ff;text-decoration:underline">Política de tratamiento de datos</a> · Selecciona una aplicación para continuar.</div>
 </body>
 </html>

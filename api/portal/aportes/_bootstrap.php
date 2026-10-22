@@ -4,6 +4,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 3);
 require_once $root . '/core/Http.php';
 require_once $root . '/core/Idempotencia.php';
+require_once $root . '/core/TokenAuth.php';
 require_once $root . '/core/portal/PortalAuth.php';
 require_once $root . '/core/solicitudes/RetiroAporteService.php';
 
@@ -13,6 +14,7 @@ set_exception_handler(static function (Throwable $e): void {
     Http::fail('Error interno', 500);
 });
 
+TokenAuth::boot();
 PortalAuth::requireAsociado();
 $retiro = new RetiroAporteService();
 $cedula = PortalAuth::actor()['cedula'];

@@ -14,6 +14,8 @@ if ($f === '' || $f[0] === '/' || strpos($f, '..') !== false) {
     Http::fail('Archivo no encontrado', 404);
 }
 
+Logger::descarga(Auth::actor()['id'] ?? null, 'pagos.comprobante', 'Comprobante ' . $f);
+
 try {
     $mime = null;
     $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));

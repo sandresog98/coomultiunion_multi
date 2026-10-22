@@ -28,4 +28,6 @@ foreach ($rows as $r) {
 }
 
 require_once dirname(__DIR__, 2) . '/utils/ExcelGenerator.php';
+Logger::descarga(Auth::actor()['id'] ?? null, 'cobranza.reportes',
+    'Reporte de comunicaciones (' . max(0, count($data) - 1) . ' filas)');
 ExcelGenerator::generateExcel($data, 'comunicaciones_cobranza_' . date('Ymd') . '.xlsx', 'Comunicaciones', [12, 28, 10, 14, 16, 18, 16, 16, 40, 20]);

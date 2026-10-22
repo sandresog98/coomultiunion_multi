@@ -197,6 +197,7 @@ final class PortalService
     /**
      * vw_creditos no expone estado; activo vs finalizado sale de
      * `sifone_datacredito.estado_credito` (5 = finalizado), codeudor = 0.
+     * Join por CAST numérico: Sifone trae cedula/numero_credito sin ceros a la izquierda.
      */
     private function creditosQuery(string $cedula): array
     {
@@ -204,7 +205,9 @@ final class PortalService
             "SELECT vc.*, dc.estado_credito
              FROM vw_creditos vc
              LEFT JOIN sifone_datacredito dc
-                ON dc.cedula = vc.cedula AND dc.numero_credito = vc.numero_credito AND dc.codeudor = 0
+                ON CAST(dc.cedula AS UNSIGNED) = CAST(vc.cedula AS UNSIGNED)
+               AND CAST(dc.numero_credito AS UNSIGNED) = CAST(vc.numero_credito AS UNSIGNED)
+               AND dc.codeudor = 0
              WHERE vc.cedula = ?"
         );
         $st->execute([$cedula]);
@@ -247,7 +250,9 @@ final class PortalService
             "SELECT vc.*, dc.estado_credito
              FROM vw_creditos vc
              LEFT JOIN sifone_datacredito dc
-                ON dc.cedula = vc.cedula AND dc.numero_credito = vc.numero_credito AND dc.codeudor = 0
+                ON CAST(dc.cedula AS UNSIGNED) = CAST(vc.cedula AS UNSIGNED)
+               AND CAST(dc.numero_credito AS UNSIGNED) = CAST(vc.numero_credito AS UNSIGNED)
+               AND dc.codeudor = 0
              WHERE vc.cedula = ? AND vc.numero_credito = ?"
         );
         $st->execute([$cedula, $numeroCredito]);
@@ -255,7 +260,6 @@ final class PortalService
         if (!$r) {
             throw new DomainException('Crédito no encontrado.');
         }
-        $r['saldo_total_con_cobranza'] = (float) $r['saldo_total'] + (float) $r['monto_cobranza'];
         return $r;
     }
 
@@ -299,14 +303,31 @@ final class PortalService
         $id = $this->cred->crear($payload, ['tipo' => 'portal', 'id' => $cedula]);
 
         // Consentimientos vía EAV (crédito: acepta_tratamiento_datos + ofertas).
-        $items = [['config_aceptacion_id' => 11, 'aceptado' => true]];
+        // Los ids se resuelven por `clave` (NUNCA hardcodeados): la configuración
+        // de aceptaciones puede recrearse y cambiar sus ids.
+        $items = [];
+        $idTrat = $this->idAceptacionPorClave('acepta_tratamiento_datos');
+        if ($idTrat > 0) {
+            $items[] = ['config_aceptacion_id' => $idTrat, 'aceptado' => true];
+        }
         if (!empty($payload['acepta_ofertas_comerciales'])) {
-            $items[] = ['config_aceptacion_id' => 12, 'aceptado' => true];
+            $idOf = $this->idAceptacionPorClave('acepta_ofertas_comerciales');
+            if ($idOf > 0) {
+                $items[] = ['config_aceptacion_id' => $idOf, 'aceptado' => true];
+            }
         }
         if ($items) {
             $this->cred->guardarAceptaciones($id, $items, ['id' => $cedula]);
         }
         return $id;
+    }
+
+    /** Id de una aceptación configurada por su `clave` (0 si no existe/está inactiva). */
+    private function idAceptacionPorClave(string $clave): int
+    {
+        $st = $this->db->prepare('SELECT id FROM credito_config_aceptacion WHERE clave = ? AND estado_activo = 1 LIMIT 1');
+        $st->execute([$clave]);
+        return (int) ($st->fetchColumn() ?: 0);
     }
 
     /** Aceptación/autorización de la solicitud por el asociado (guardarAceptaciones + marca). */

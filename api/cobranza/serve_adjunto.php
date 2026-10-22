@@ -10,6 +10,7 @@ $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) Http::fail('Falta el id del adjunto.');
 $a = $ind->getAdjuntoPorId($id);
 if (!$a) Http::fail('Adjunto no encontrado.', 404);
+Logger::descarga(Auth::actor()['id'] ?? null, 'cobranza.adjuntos', 'Adjunto #' . $id);
 $mime = match (strtolower(pathinfo((string) $a['ruta_archivo'], PATHINFO_EXTENSION))) {
     'pdf' => 'application/pdf',
     'png' => 'image/png',

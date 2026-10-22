@@ -17,17 +17,19 @@ $lines = $db->query("SELECT id, nombre_credito, tasa, seguro_vida, seguro_deudor
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Simulador de Crédito — Coomultiunion</title>
 <link rel="icon" href="<?= $appBase ?>/assets/favicons/favicon.ico" sizes="any">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Tema: fija data-bs-theme ANTES de pintar (evita parpadeo). Por defecto: claro. -->
+<script>(function(){try{var t=localStorage.getItem('multi-theme');document.documentElement.setAttribute('data-bs-theme',t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-bs-theme','light');}})();</script>
+<link href="<?= $appBase ?>/assets/vendor/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/vendor/fontawesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/css/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/front.css">
 <style>
 :root{--prim:var(--brand-blue);--prim-dark:var(--brand-blue-dark);--amar:var(--brand-yellow);--rojo:var(--brand-red);}
-body{background:var(--front-bg);font-family:var(--front-font)}
+body{background:var(--front-bg);font-family:var(--front-font);min-height:100vh;display:flex;flex-direction:column}
 .sim-header{background:linear-gradient(135deg,var(--prim),var(--prim-dark));padding:14px 26px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
 .sim-header img{height:42px}
 .sim-header h1{color:#fff;font-size:1.25em;font-weight:700;margin:0}
-.sim-container{max-width:1400px;margin:0 auto;padding:22px 18px}
+.sim-container{flex:1 1 auto;max-width:1400px;margin:0 auto;padding:22px 18px}
 .card{border:none;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.07);margin-bottom:18px}
 .card-header{background:linear-gradient(135deg,var(--prim),var(--prim-dark));color:#fff;font-weight:600;padding:12px 18px;border-radius:12px 12px 0 0}
 .form-label{font-size:.82em;font-weight:600;color:#555;margin-bottom:4px}
@@ -38,13 +40,16 @@ body{background:var(--front-bg);font-family:var(--front-font)}
 .table-amort thead th{background:var(--prim-dark);color:#fff;text-align:center;padding:8px}
 .table-amort tbody td{text-align:right;padding:6px 8px}
 .table-amort tr.row-last{font-weight:700;background:#d4edda}
+.sim-footer{margin-top:auto}
 @media print{.no-print{display:none!important}}
 </style>
+<link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
 <body class="front-body-falling">
 <header class="sim-header no-print">
   <img src="<?= $appBase ?>/assets/img/logo.png" alt="Logo">
   <h1><i class="fas fa-calculator me-2"></i>Simulador de Crédito Coomultiunion</h1>
+  <button type="button" class="theme-toggle" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>
 </header>
 <div class="sim-container">
   <div class="card no-print">
@@ -97,6 +102,10 @@ body{background:var(--front-bg);font-family:var(--front-font)}
   <div id="resumen" class="mt-2"></div>
   <div id="tabla"></div>
 </div>
+
+<footer class="sim-footer text-center small py-3 px-3 no-print" style="color:var(--front-muted)">
+  <a href="<?= $appBase ?>/privacidad" style="color:var(--brand-blue)">Política de tratamiento de datos</a>
+</footer>
 
 <script>
 var API=<?= json_encode($API) ?>, API_PDF=<?= json_encode($APIPDF) ?>;
@@ -187,5 +196,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   initLineas();
 });
 </script>
+<script src="<?= $appBase ?>/assets/js/theme.js"></script>
 </body>
 </html>

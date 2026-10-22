@@ -53,7 +53,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
         +dato('Desembolso inicial',money(d.desembolso_inicial))+dato('Saldo capital',money(d.saldo_capital))
         +dato('Saldo intereses',money(d.saldo_intereses))+dato('Saldo total',money(d.saldo_total))
         +dato('Pago mínimo',money(d.pago_minimo))
-        +(Number(d.monto_cobranza)>0?dato('Monto cobranza',money(d.monto_cobranza))+dato('Saldo total con cobranza',money(d.saldo_total_con_cobranza)):'')
+        +(Number(d.monto_cobranza)>0?dato('Monto cobranza',money(d.monto_cobranza)):'')
       +'</div>'
       +'<hr class="my-3">'
       +'<div class="card-header-brand mb-2"><i class="fa-solid fa-'+(enMora?'triangle-exclamation':'circle-check')+' fa-lg"></i><div class="fw-semibold">Estado de pago</div></div>'

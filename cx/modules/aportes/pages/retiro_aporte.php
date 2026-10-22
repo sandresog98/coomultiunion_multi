@@ -34,6 +34,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
           <div class="form-text small">Solo PDF, máximo 10 MB.</div>
         </div>
         <button type="submit" class="btn btn-portal-gradient" id="btn"><i class="fa-solid fa-paper-plane me-1"></i>Enviar solicitud</button>
+        <div class="form-text small text-muted mt-2">Al enviar aceptas nuestra <a href="<?= $APP ?>/privacidad" target="_blank" rel="noopener">Política de Tratamiento de Datos Personales</a>.</div>
       </form>
     </div>
   </div>

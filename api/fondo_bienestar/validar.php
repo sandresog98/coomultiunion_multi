@@ -10,6 +10,9 @@ $convenioId = (int) ($_GET['convenio_id'] ?? 0);
 if ($cedula === '' || $convenioId <= 0) Http::fail('Faltan cedula o convenio_id.');
 $val = new FondoBienestarValidacion();
 $cert = $val->validarApto($cedula, $convenioId);
+Logger::log('consultar', 'fondo_bienestar.validar', Auth::actor()['id'] ?? null,
+    'Elegibilidad cédula ' . $cedula . ' convenio #' . $convenioId
+        . ' → ' . (!empty($cert['apto']) ? 'apto' : 'no apto'));
 Http::ok([
     'validacion' => $cert,
     'pagos' => $val->obtenerEstadoPagos($cedula),

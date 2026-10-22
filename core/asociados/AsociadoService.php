@@ -106,7 +106,7 @@ final class AsociadoService
         $creditos = $st->fetchAll();
 
         $estado = $this->uno(
-            "SELECT estado_activo, password_hash IS NOT NULL AS tiene_portal
+            "SELECT estado_activo, opt_in, password_hash IS NOT NULL AS tiene_portal
              FROM asociados_control WHERE cedula = ?", [$cedula]
         );
 
@@ -114,8 +114,15 @@ final class AsociadoService
             'persona'   => $persona,
             'productos' => $productos ?: [],
             'creditos'  => $creditos,
-            'estado'    => $estado ?: ['estado_activo' => 1, 'tiene_portal' => 0],
+            'estado'    => $estado ?: ['estado_activo' => 1, 'opt_in' => 0, 'tiene_portal' => 0],
         ];
+    }
+
+    /** Activa/inactiva el consentimiento maestro de comunicaciones. */
+    public function setOptIn(string $cedula, bool $optIn, ?array $actor = null): void
+    {
+        require_once dirname(__DIR__) . '/comunicaciones/ContactoService.php';
+        (new ContactoService($this->db))->setOptInAsociado($cedula, $optIn, $actor);
     }
 
     /** Activa/inactiva un asociado en asociados_control. */

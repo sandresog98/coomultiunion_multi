@@ -87,6 +87,17 @@ DROP TABLE IF EXISTS tienda_productos;
 DROP TABLE IF EXISTS tienda_marcas;
 DROP TABLE IF EXISTS tienda_categorias;
 
+-- Comunicaciones (Twilio / SendGrid)
+DROP TABLE IF EXISTS com_uso_twilio;
+DROP TABLE IF EXISTS com_entrantes;
+DROP TABLE IF EXISTS com_eventos;
+DROP TABLE IF EXISTS com_destinatarios;
+DROP TABLE IF EXISTS com_planes;
+DROP TABLE IF EXISTS com_adjuntos;
+DROP TABLE IF EXISTS com_plantillas;
+DROP TABLE IF EXISTS com_contactos;
+DROP TABLE IF EXISTS com_remitentes;
+
 -- Vistas
 DROP VIEW IF EXISTS vw_movimientos;
 DROP VIEW IF EXISTS vw_productos;

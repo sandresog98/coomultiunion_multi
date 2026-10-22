@@ -13,5 +13,5 @@ if ($m !== 'GET') {
 }
 if ($m === 'POST') { Http::ok(['id' => $cfg->lineaCrear($in, $actor)], 201); }
 elseif ($m === 'PUT') { $id = (int) ($in['id'] ?? 0); if ($id <= 0) Http::fail('Falta el id.'); $cfg->lineaEditar($id, $in, $actor); Http::ok(['id' => $id]); }
-elseif ($m === 'GET') { Http::ok($cfg->lineas(false, false)); }
+elseif ($m === 'GET') { Http::ok(($_GET['sin_mapear'] ?? '') === '1' ? $cfg->lineasSinMapear() : $cfg->lineas(false, false)); }
 else Http::fail('Método no permitido', 405);

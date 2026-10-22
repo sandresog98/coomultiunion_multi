@@ -14,6 +14,9 @@ if ($adjId <= 0) {
 
 $adj = $service->serveAdjunto($adjId, $actor);
 
+Logger::descarga($actor['id'] ?? null, 'solicitudes.adjuntos',
+    'Adjunto #' . $adjId . ' de solicitud #' . (int) ($adj['solicitud_id'] ?? 0));
+
 // La ruta en BD puede venir como 'uploads/solicitudes/...' o 'solicitudes/...'.
 // Normalizamos a clave del storage (relativa a la raíz de uploads, con prefijo de módulo).
 $ruta = ltrim((string) $adj['ruta_archivo'], '/');

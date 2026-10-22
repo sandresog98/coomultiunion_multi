@@ -5,9 +5,10 @@ require_once dirname(__DIR__, 2) . '/_env.php';
 </main>
 </div><!-- .portal-shell -->
 <footer class="py-3 text-center text-muted small border-top bg-white">
-  © <?= date('Y') ?> Coomultiunion · Portal de asociados
+  © <?= date('Y') ?> Coomultiunion · Portal de asociados ·
+  <a class="link-secondary" href="<?= $APP ?>/privacidad">Política de tratamiento de datos</a>
 </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= $APP ?>/assets/vendor/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script src="<?= $APP ?>/assets/js/common.js"></script>
 <script src="<?= $APP ?>/assets/js/theme.js"></script>
 <script>

@@ -1,0 +1,1815 @@
+openapi: 3.0.3
+info:
+  title: Multi App v2 — API por tokens
+  version: 1.0.0
+  description: |
+    Contrato de la API autenticada por **token Bearer** para integraciones externas (curl/Postman).
+
+    ## Cómo obtener un token
+    **Solicita un token a un administrador.** Te entregará el secreto (se muestra una
+    sola vez) con su vigencia y los permisos (scopes) correspondientes. Para rotarlo o
+    revocarlo, vuelve a solicitarlo a un administrador.
+
+    ## Autenticación
+    - `Authorization: Bearer <secreto>` (o `X-Api-Key: <secreto>`).
+    - Peticiones stateless: **no** usan cookie y **no** requieren CSRF.
+    - En producción se exige **HTTPS**.
+    - Mutadores (POST/PUT/DELETE): envía `X-Idempotency-Key` (UUID único por intento).
+
+    ## Autorización (3 capas)
+    Una operación se permite solo si:
+    `rol del usuario del token` ∧ `clave ∈ endpoints autorizados (allowlist)` ∧ `clave ∈ scopes del token`.
+
+    Cada operación declara:
+    - `x-required-scopes`: scopes que la habilitan (cualquiera de la lista).
+    - `x-module-gate`: módulo RBAC que el rol debe tener (si difiere del prefijo).
+    - `x-actor`: `staff`, `portal`, `both` o `public`.
+    - `x-idempotent`: si exige `X-Idempotency-Key`.
+    - `x-restrictions`: restricciones adicionales del endpoint.
+
+    Estos metadatos se muestran como una tabla **Campo/Valor** al final de la
+    descripción de cada operación (actor, scopes, módulo-gate, idempotencia y notas).
+
+    ## Impersonación (portal)
+    Un token con el scope especial `portal.actuar` **y** el header
+    `X-Acting-As-Cedula: <cédula>` opera como ese asociado (aislado por cédula y auditado).
+    Sin el header: `portal/*` → 401 y `solicitudes/*` → 403.
+
+    ## Cómo encontrar el `id` (descubrimiento)
+    Los mutadores (POST/PUT/DELETE) reciben el `id` del recurso. Para obtenerlo:
+    1. `GET /<módulo>/listar?q=<clave natural>` (o un filtro específico: `cedula`, `radicado`, `serial`).
+    2. La respuesta trae `{ rows: [...], total, limit, offset }`; cada fila incluye `id` y sus claves naturales.
+    3. Usa ese `id` en el mutador.
+
+    `q` busca por claves naturales según el módulo: cédula/nombre, serial/factura,
+    número de solicitud, radicado, etc.
+
+    ## Convención de métodos (importante)
+    - **POST** se usa para crear **y** para actualizar/accionar en los módulos con
+      multiplexor (`?action=` / `accion=`): **tienda, convenios, créditos y boletas**.
+      En esos módulos **no hay `PUT`**: se actualiza con `POST` (`id>0` → editar, o `accion=...`).
+    - **PUT** se usa para editar en **cobranza, movimientos, asociados/productos** y
+      **pagos** (`confirmar.php`).
+    - **DELETE** se usa para desasignar/eliminar donde el endpoint lo expone.
+
+    ## Límites y errores
+    Formato: `{"ok":false,"error":"..."}`
+
+    | HTTP | Significado |
+    |---|---|
+    | 400 | Datos inválidos o falta `X-Idempotency-Key` |
+    | 401 | Sin token / token inválido, revocado o expirado |
+    | 403 | Token válido sin permiso (rol/allowlist/scopes) o requiere HTTPS |
+    | 405 | Método HTTP no permitido |
+    | 409 | Clave idempotente en uso / operación en proceso |
+    | 429 | Rate limit por token excedido |
+
+    ## Variables de entorno
+    ```ini
+    API_TOKEN_ENABLED=1
+    API_TOKEN_DIAS_DEFAULT=180
+    API_TOKEN_MAX_DIAS=365
+    API_TOKEN_HTTPS_ONLY=0
+    API_TOKEN_RATE_MAX=120
+    API_TOKEN_RATE_WINDOW=60
+    ```
+
+    ## Seguridad
+    - Secreto de 32 bytes; almacenado solo como SHA-256; se muestra una vez.
+    - Expiración obligatoria + revocación + rotación; usuario y rol resueltos en vivo.
+    - Auditoría en `logs` (prefijo, usuario, método y ruta) y rate limit por token.
+    - La gestión de tokens no se realiza con la propia API.
+  contact:
+    name: Multi App v2
+servers:
+  - url: https://coomultiunion.andapps.cloud/dev/api
+    description: Pruebas (test)
+  - url: https://coomultiunion.andapps.cloud/multi/api
+    description: Producción
+tags:
+  - name: Health
+    description: Diagnóstico y disponibilidad del servicio.
+  - name: Solicitudes
+    description: Solicitudes internas (staff) y PQRS/trámites del portal.
+  - name: Portal
+    description: Datos y acciones del asociado (requiere impersonación con X-Acting-As-Cedula).
+  - name: Asociados
+    description: Búsqueda de asociados y gestión de productos/cláusulas asignados.
+  - name: Cobranza
+    description: Comunicaciones, indagaciones y compromisos de pago.
+  - name: Pagos
+    description: Conciliación y confirmación de pagos (PSE/Confiar) y comprobantes.
+  - name: Movimientos
+    description: Movimientos contables y catálogo de tipos.
+  - name: Cargas
+    description: Procesamiento de archivos Sifone (.xls/.xlsx).
+  - name: Créditos
+    description: Solicitudes de crédito y gestión del expediente.
+  - name: Tienda
+    description: Catálogo, clientes, compras y ventas de la tienda.
+  - name: Convenios
+    description: Convenios y productos (administración).
+  - name: Boletas
+    description: Stock, venta y contabilización de boletas.
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+paths:
+  /ping.php:
+    get:
+      operationId: getPing
+      tags: [Health]
+      summary: Ping/pong (health check)
+      description: "Público. Si se envía un Bearer, lo valida (401 si es inválido/expirado). — **Restricciones.** Público. Con Bearer válido audita el uso."
+      security: []
+      x-actor: public
+      x-required-scopes: []
+      x-idempotent: false
+      x-restrictions: "Público. Con Bearer válido audita el uso."
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      operationId: postPing
+      tags: [Health]
+      summary: Ping/pong (health check)
+      description: "Igual que GET. — **Restricciones.** Público. Con Bearer válido audita el uso."
+      security: []
+      x-actor: public
+      x-required-scopes: []
+      x-idempotent: false
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /solicitudes/crear.php:
+    post:
+      operationId: postSolicitudesCrear
+      tags: [Solicitudes]
+      summary: Crear solicitud (ticket staff o PQRS/boleta/redención/certificado/actualizar info del portal)
+      description: |
+        - **Staff** (`cedula_solicitante` = id de usuario interno): puede crear cualquier tipo.
+          Para `tipo=ticket` exige `responsable_id` y el scope `solicitudes.gestion.crear_ticket`.
+        - **Portal/impersonación** (`X-Acting-As-Cedula`): la cédula del actor manda; **no** puede crear `ticket`.
+        
+        **Restricciones.** Scope: `solicitudes.gestion.crear_ticket`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · - tipo=ticket: requiere responsable_id; el portal NO puede crear tickets. - tipo=boleta + metodo_pago=qr: exige archivo (multipart). - tipo=boleta + metodo_pago=credito: valida elegibilidad y límite. - multipart si se adjuntan archivos (`files[]`).
+      x-actor: both
+      x-required-scopes:
+        - solicitudes.gestion.crear_ticket
+        - portal.actuar
+      x-module-gate: solicitudes
+      x-idempotent: true
+      x-restrictions: |
+        - tipo=ticket: requiere responsable_id; el portal NO puede crear tickets.
+        - tipo=boleta + metodo_pago=qr: exige archivo (multipart).
+        - tipo=boleta + metodo_pago=credito: valida elegibilidad y límite.
+        - multipart si se adjuntan archivos (`files[]`).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo]
+              properties:
+                tipo: { type: string, enum: [ticket, pqrs, boleta, redencion, retiro_incentivos, certificado, actualizar_info, fondo, nuevo_producto, retiro_aporte] }
+                cedula_solicitante: { type: string, description: "Staff: id de usuario interno solicitante" }
+                responsable_id: { type: integer, description: "Solo ticket (staff)" }
+                detalle:
+                  type: object
+                  additionalProperties: true
+            example:
+              tipo: ticket
+              cedula_solicitante: "1"
+              responsable_id: 2
+              detalle: { categoria_id: 1, resumen: "Alto de impresora", descripcion: "..." }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                tipo: { type: string }
+                cedula_solicitante: { type: string }
+                responsable_id: { type: integer }
+                detalle: { type: string, description: "JSON serializado" }
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /solicitudes/listar.php:
+    get:
+      operationId: getSolicitudesListar
+      tags: [Solicitudes]
+      summary: Listar solicitudes
+      description: "Staff: todas (con filtros). Portal/impersonación: solo la cédula actuada. — **Restricciones.** Scope: `solicitudes`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Portal: fuerza cédula del actor. Staff: permite `?cedula=`."
+      x-actor: both
+      x-required-scopes: [solicitudes, portal.actuar]
+      x-module-gate: solicitudes
+      x-idempotent: false
+      x-restrictions: "Portal: fuerza cédula del actor. Staff: permite `?cedula=`."
+      parameters:
+        - $ref: '#/components/parameters/ActingAsCedula'
+        - { name: tipo, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: fase, in: query, schema: { type: string } }
+        - { name: responsable, in: query, schema: { type: integer } }
+        - { name: cedula, in: query, schema: { type: string }, description: "Solo staff" }
+        - { name: radicado, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /solicitudes/detalle.php:
+    get:
+      operationId: getSolicitudesDetalle
+      tags: [Solicitudes]
+      summary: Detalle de una solicitud
+      description: "**Restricciones.** Scope: `solicitudes`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Portal: solo si la solicitud pertenece a la cédula actuada (si no, 403)."
+      x-actor: both
+      x-required-scopes: [solicitudes, portal.actuar]
+      x-module-gate: solicitudes
+      x-idempotent: false
+      x-restrictions: "Portal: solo si la solicitud pertenece a la cédula actuada (si no, 403)."
+      parameters:
+        - $ref: '#/components/parameters/ActingAsCedula'
+        - { name: id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /solicitudes/comentar.php:
+    post:
+      operationId: postSolicitudesComentar
+      tags: [Solicitudes]
+      summary: Comentar una solicitud (opcionalmente con adjuntos)
+      description: "**Restricciones.** Scope: `solicitudes`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · Portal: solo sus solicitudes. Staff necesita scope/acción de comentar cuando aplica."
+      x-actor: both
+      x-required-scopes: [solicitudes, portal.actuar]
+      x-module-gate: solicitudes
+      x-idempotent: true
+      x-restrictions: "Portal: solo sus solicitudes. Staff necesita scope/acción de comentar cuando aplica."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [id, mensaje]
+              properties:
+                id: { type: integer }
+                mensaje: { type: string }
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /solicitudes/adjuntar.php:
+    post:
+      operationId: postSolicitudesAdjuntar
+      tags: [Solicitudes]
+      summary: Adjuntar archivo a una solicitud
+      description: "**Restricciones.** Scope: `solicitudes`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · Multipart. Portal: solo sus solicitudes."
+      x-actor: both
+      x-required-scopes: [solicitudes, portal.actuar]
+      x-module-gate: solicitudes
+      x-idempotent: true
+      x-restrictions: "Multipart. Portal: solo sus solicitudes."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [id, file]
+              properties:
+                id: { type: integer }
+                file: { type: string, format: binary }
+                contexto: { type: string, default: solicitud }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /solicitudes/transicion.php:
+    post:
+      operationId: postSolicitudesTransicion
+      tags: [Solicitudes]
+      summary: Transicionar el estado de una solicitud
+      description: "**Restricciones.** Scope: `solicitudes`, `portal.actuar` · Módulo: `solicitudes` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · Staff: scope de acción. Portal: solo sus solicitudes (no retiro_aporte)."
+      x-actor: both
+      x-required-scopes: [solicitudes, portal.actuar]
+      x-module-gate: solicitudes
+      x-idempotent: true
+      x-restrictions: "Staff: scope de acción. Portal: solo sus solicitudes (no retiro_aporte)."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, estado_destino]
+              properties:
+                id: { type: integer }
+                estado_destino: { type: string }
+                comentario: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /portal/convenios.php:
+    get:
+      operationId: getPortalConvenios
+      tags: [Portal]
+      summary: Catálogo de convenios/productos del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula` · Requiere X-Acting-As-Cedula (si no, 401)."
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      x-restrictions: "Requiere X-Acting-As-Cedula (si no, 401)."
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/aportes.php:
+    get:
+      operationId: getPortalAportes
+      tags: [Portal]
+      summary: Saldos/resumen de aportes del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula` · Requiere X-Acting-As-Cedula."
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      x-restrictions: "Requiere X-Acting-As-Cedula."
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/extractos.php:
+    get:
+      operationId: getPortalExtractos
+      tags: [Portal]
+      summary: Extractos del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/movimientos.php:
+    get:
+      operationId: getPortalMovimientos
+      tags: [Portal]
+      summary: Movimientos del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/creditos.php:
+    get:
+      operationId: getPortalCreditos
+      tags: [Portal]
+      summary: Créditos del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/creditos_detalle.php:
+    get:
+      operationId: getPortalCreditosDetalle
+      tags: [Portal]
+      summary: Detalle de crédito del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters:
+        - $ref: '#/components/parameters/ActingAsCedula'
+        - { name: id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /portal/solicitud_calificar.php:
+    post:
+      operationId: postPortalSolicitudCalificar
+      tags: [Portal]
+      summary: Calificar la atención de una solicitud
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · Solo solicitudes del asociado actuado."
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: true
+      x-restrictions: "Solo solicitudes del asociado actuado."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, puntuacion]
+              properties:
+                id: { type: integer }
+                puntuacion: { type: integer, minimum: 1, maximum: 5 }
+                comentarios: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/fondo/convenios.php:
+    get:
+      operationId: getPortalFondoConvenios
+      tags: [Portal]
+      summary: Convenios de Fondo de Bienestar disponibles
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/fondo/solicitar.php:
+    post:
+      operationId: postPortalFondoSolicitar
+      tags: [Portal]
+      summary: Solicitar un convenio de Fondo de Bienestar
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/solicitudes_listar.php:
+    get:
+      operationId: getPortalSolicitudesListar
+      tags: [Portal]
+      summary: Listar solicitudes del asociado
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula`"
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: false
+      parameters: [{ $ref: '#/components/parameters/ActingAsCedula' }]
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /portal/solicitudes_crear.php:
+    post:
+      operationId: postPortalSolicitudesCrear
+      tags: [Portal]
+      summary: Crear solicitud desde el portal
+      description: "**Restricciones.** Scope: `portal.actuar` · Requiere `X-Acting-As-Cedula` · Requiere `X-Idempotency-Key` · No permite tipo=ticket."
+      x-actor: portal
+      x-required-scopes: [portal.actuar]
+      x-idempotent: true
+      x-restrictions: "No permite tipo=ticket."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ActingAsCedula'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo]
+              properties:
+                tipo: { type: string }
+                detalle: { type: object, additionalProperties: true }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /asociados/listar.php:
+    get:
+      operationId: getAsociadosListar
+      tags: [Asociados]
+      summary: Buscar/listar asociados
+      description: "**Restricciones.** Scope: `oficina.asociados` · Módulo: `oficina.asociados`"
+      x-actor: staff
+      x-required-scopes: [oficina.asociados]
+      x-module-gate: oficina.asociados
+      x-idempotent: false
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /productos/asignaciones.php:
+    post:
+      operationId: postProductosAsignaciones
+      tags: [Asociados]
+      summary: Asignar producto/cláusula a un asociado
+      description: "**Restricciones.** Scope: `asociados.detalle.asignar` · Módulo: `oficina.asociados` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [asociados.detalle.asignar]
+      x-module-gate: oficina.asociados
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cedula, producto_id]
+              properties:
+                cedula: { type: string }
+                producto_id: { type: integer }
+                monto: { type: number }
+                dia_pago: { type: integer }
+                meses_vigencia: { type: integer }
+                fecha_inicio: { type: string, format: date }
+                detalle: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: putProductosAsignaciones
+      tags: [Asociados]
+      summary: Editar asignación (o activar/inactivar con estado_activo)
+      description: "**Restricciones.** Scope: `asociados.detalle.editar` · Módulo: `oficina.asociados` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [asociados.detalle.editar]
+      x-module-gate: oficina.asociados
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: integer }
+                monto: { type: number }
+                dia_pago: { type: integer }
+                meses_vigencia: { type: integer }
+                fecha_inicio: { type: string, format: date }
+                detalle: { type: string }
+                estado_activo: { type: integer, enum: [0, 1] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: deleteProductosAsignaciones
+      tags: [Asociados]
+      summary: Eliminar asignación
+      description: "**Restricciones.** Scope: `asociados.detalle.eliminar` · Módulo: `oficina.asociados` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [asociados.detalle.eliminar]
+      x-module-gate: oficina.asociados
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties: { id: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /productos/upload.php:
+    post:
+      operationId: postProductosUpload
+      tags: [Asociados]
+      summary: Subir adjunto de una asignación
+      description: "**Restricciones.** Scope: `asociados.detalle.adjuntar` · Módulo: `oficina.asociados` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [asociados.detalle.adjuntar]
+      x-module-gate: oficina.asociados
+      x-idempotent: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archivo]
+              properties: { archivo: { type: string, format: binary } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cobranza/comunicacion.php:
+    post:
+      operationId: postCobranzaComunicacion
+      tags: [Cobranza]
+      summary: Registrar comunicación/compromiso
+      description: "**Restricciones.** Scope: `cobranza.lista.comunicar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asociado_cedula]
+              properties:
+                asociado_cedula: { type: string }
+                tipo_origen: { type: string }
+                tipo_comunicacion: { type: string }
+                estado: { type: string }
+                fecha: { type: string, format: date }
+                comentario: { type: string }
+                fecha_compromiso: { type: string, format: date }
+                monto_compromiso: { type: number }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: putCobranzaComunicacion
+      tags: [Cobranza]
+      summary: Editar comunicación
+      description: "**Restricciones.** Scope: `cobranza.lista.comunicar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteCobranzaComunicacion
+      tags: [Cobranza]
+      summary: Eliminar comunicación
+      description: "**Restricciones.** Scope: `cobranza.lista.comunicar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /cobranza/indagacion.php:
+    post:
+      operationId: postCobranzaIndagacion
+      tags: [Cobranza]
+      summary: Registrar indagación
+      description: "**Restricciones.** Scope: `cobranza.lista.indagar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.indagar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: putCobranzaIndagacion
+      tags: [Cobranza]
+      summary: Editar indagación
+      description: "**Restricciones.** Scope: `cobranza.lista.indagar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.indagar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      operationId: deleteCobranzaIndagacion
+      tags: [Cobranza]
+      summary: Eliminar indagación
+      description: "**Restricciones.** Scope: `cobranza.lista.indagar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.indagar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /cobranza/adjunto.php:
+    post:
+      operationId: postCobranzaAdjunto
+      tags: [Cobranza]
+      summary: Adjuntar archivo a una indagación
+      description: "**Restricciones.** Scope: `cobranza.lista.adjuntar` · Módulo: `cobranza` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.adjuntar]
+      x-module-gate: cobranza
+      x-idempotent: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [indagacion_id, archivo]
+              properties:
+                indagacion_id: { type: integer }
+                archivo: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /pagos/conciliacion.php:
+    post:
+      operationId: postPagosConciliacion
+      tags: [Pagos]
+      summary: Asignar pago PSE a un pago Confiar (conciliar)
+      description: "**Restricciones.** Scope: `pagos.conciliar` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [pagos.conciliar]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pse_id, confiar_id]
+              properties:
+                pse_id: { type: integer }
+                confiar_id: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: deletePagosConciliacion
+      tags: [Pagos]
+      summary: Desasignar (desconciliar)
+      description: "**Restricciones.** Scope: `pagos.conciliar` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [pagos.conciliar]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pse_id, confiar_id]
+              properties:
+                pse_id: { type: integer }
+                confiar_id: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /pagos/confirmar.php:
+    post:
+      operationId: postPagosConfirmar
+      tags: [Pagos]
+      summary: Asignar pago Confiar a un asociado
+      description: "**Restricciones.** Scope: `pagos.confirmar` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [pagos.confirmar]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confiar_id, cedula]
+              properties:
+                confiar_id: { type: integer }
+                cedula: { type: string }
+                comentario: { type: string }
+                ruta_comprobante: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: putPagosConfirmar
+      tags: [Pagos]
+      summary: Marcar como no válido o desasignar
+      description: "**Restricciones.** Scope: `pagos.confirmar` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key` · Usa motivo (no válido) o desasignar=true (revertir a pendiente)."
+      x-actor: staff
+      x-required-scopes: [pagos.confirmar]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      x-restrictions: "Usa motivo (no válido) o desasignar=true (revertir a pendiente)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confiar_id]
+              properties:
+                confiar_id: { type: integer }
+                motivo: { type: string }
+                desasignar: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /pagos/upload.php:
+    post:
+      operationId: postPagosUpload
+      tags: [Pagos]
+      summary: Subir comprobante de pago Confiar
+      description: "**Restricciones.** Scope: `pagos.upload` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [pagos.upload]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archivo]
+              properties: { archivo: { type: string, format: binary } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /movimientos/crear.php:
+    post:
+      operationId: postMovimientosCrear
+      tags: [Movimientos]
+      summary: Crear movimiento
+      description: "**Restricciones.** Scope: `movimientos.crear` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [movimientos.crear]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cedula, tipo, valor, fecha]
+              properties:
+                cedula: { type: string }
+                tipo: { type: integer }
+                valor: { type: number }
+                fecha: { type: string, format: date }
+                asociado_referido: { type: string }
+                observaciones: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /movimientos/editar.php:
+    put:
+      operationId: putMovimientosEditar
+      tags: [Movimientos]
+      summary: Editar movimiento
+      description: "**Restricciones.** Scope: `movimientos.editar` · Módulo: `oficina.transacciones` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [movimientos.editar]
+      x-module-gate: oficina.transacciones
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: integer }
+                cedula: { type: string }
+                tipo: { type: integer }
+                valor: { type: number }
+                fecha: { type: string, format: date }
+                asociado_referido: { type: string }
+                observaciones: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /movimientos_tipos/activos.php:
+    get:
+      operationId: getMovimientosTiposActivos
+      tags: [Movimientos]
+      summary: Catálogo de tipos de movimiento activos
+      description: "**Restricciones.** Scope: `oficina.movimientos_tipos` · Módulo: `oficina.movimientos_tipos`"
+      x-actor: staff
+      x-required-scopes: [oficina.movimientos_tipos]
+      x-module-gate: oficina.movimientos_tipos
+      x-idempotent: false
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cargas/procesar.php:
+    post:
+      operationId: postCargasProcesar
+      tags: [Cargas]
+      summary: Procesar archivo Sifone (.xls/.xlsx)
+      description: "**Restricciones.** Scope: `cargas.procesar` · Módulo: `cargas` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [cargas.procesar]
+      x-module-gate: cargas
+      x-idempotent: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [tipo, archivo]
+              properties:
+                tipo: { type: string }
+                archivo: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/crear.php:
+    post:
+      operationId: postCreditosCrear
+      tags: [Créditos]
+      summary: Crear solicitud de crédito
+      description: "**Restricciones.** Scope: `creditos.nueva_solicitud.crear` · Módulo: `creditos` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [creditos.nueva_solicitud.crear]
+      x-module-gate: creditos
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cedula_asociado, monto_deseado, numero_cuotas_deseadas]
+              properties:
+                cedula_asociado: { type: string }
+                tipo_solicitante: { type: string }
+                nombre_solicitante: { type: string }
+                numero_identificacion: { type: string }
+                numero_telefono: { type: string }
+                correo_electronico: { type: string }
+                monto_deseado: { type: number }
+                numero_cuotas_deseadas: { type: integer }
+                desea_codeudor: { type: boolean }
+                tipo_codeudor: { type: string }
+                tasa_interes_id: { type: integer }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/transicion.php:
+    post:
+      operationId: postCreditosTransicion
+      tags: [Créditos]
+      summary: Cambiar de etapa (u otras acciones del expediente)
+      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.actualizar`, `creditos.gestionar_solicitud.acciones` · Módulo: `creditos` · Requiere `X-Idempotency-Key` · Multiplexor por `accion`: - `etapa` → `creditos.gestionar_solicitud.etapas` - `actualizar` → `creditos.gestionar_solicitud.actualizar` - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`"
+      x-actor: staff
+      x-required-scopes:
+        - creditos.gestionar_solicitud.etapas
+        - creditos.gestionar_solicitud.actualizar
+        - creditos.gestionar_solicitud.acciones
+      x-module-gate: creditos
+      x-idempotent: true
+      x-restrictions: |
+        Multiplexor por `accion`:
+        - `etapa` → `creditos.gestionar_solicitud.etapas`
+        - `actualizar` → `creditos.gestionar_solicitud.actualizar`
+        - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, accion]
+              properties:
+                id: { type: integer }
+                accion: { type: string, enum: [etapa, actualizar, cancelar, rechazar, aprobar, costos_pac, desembolso] }
+                destino: { type: string, description: "Solo accion=etapa" }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/valores.php:
+    post:
+      operationId: postCreditosValores
+      tags: [Créditos]
+      summary: Diligenciar campos del expediente
+      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.campos` · Módulo: `creditos` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [creditos.gestionar_solicitud.campos]
+      x-module-gate: creditos
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, valores]
+              properties:
+                id: { type: integer }
+                valores:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      config_campo_id: { type: integer }
+                      valor: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tienda/catalogo.php:
+    get:
+      operationId: getTiendaCatalogo
+      tags: [Tienda]
+      summary: Listar/obtener catálogo (categorías, marcas, productos)
+      description: "`q` busca nombre/descripción. `action=listar` devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `tienda.catalogo.crear`, `tienda.catalogo.editar`, `tienda.catalogo.toggle`, `tienda.catalogo.eliminar` · Módulo: `tienda.catalogo`"
+      x-actor: staff
+      x-required-scopes: [tienda.catalogo.crear, tienda.catalogo.editar, tienda.catalogo.toggle, tienda.catalogo.eliminar]
+      x-module-gate: tienda.catalogo
+      x-idempotent: false
+      parameters:
+        - { name: ent, in: query, required: true, schema: { type: string, enum: [productos, categorias, marcas] } }
+        - { name: action, in: query, required: true, schema: { type: string, enum: [listar, obtener, activas] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: id, in: query, schema: { type: integer }, description: "Para action=obtener" }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: postTiendaCatalogo
+      tags: [Tienda]
+      summary: CRUD de catálogo (categoría/marca/producto)
+      description: "**Restricciones.** Scope: `tienda.catalogo.crear`, `tienda.catalogo.editar`, `tienda.catalogo.toggle`, `tienda.catalogo.eliminar` · Módulo: `tienda.catalogo` · Requiere `X-Idempotency-Key` · Multiplexor `?ent=productos|categorias|marcas` + `?action=guardar|toggle|toggle_agotado|eliminar`; multipart con `foto`."
+      x-actor: staff
+      x-required-scopes:
+        - tienda.catalogo.crear
+        - tienda.catalogo.editar
+        - tienda.catalogo.toggle
+        - tienda.catalogo.eliminar
+      x-module-gate: tienda.catalogo
+      x-idempotent: true
+      x-restrictions: "Multiplexor `?ent=productos|categorias|marcas` + `?action=guardar|toggle|toggle_agotado|eliminar`; multipart con `foto`."
+      parameters:
+        - { name: ent, in: query, required: true, schema: { type: string, enum: [productos, categorias, marcas] } }
+        - { name: action, in: query, required: true, schema: { type: string, enum: [guardar, toggle, toggle_agotado, eliminar] } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tienda/clientes.php:
+    get:
+      operationId: getTiendaClientes
+      tags: [Tienda]
+      summary: Listar/obtener clientes de tienda
+      description: "`q` busca nombre/cédula. `action=listar` devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `tienda.clientes.crear`, `tienda.clientes.editar`, `tienda.clientes.toggle`, `tienda.clientes.eliminar` · Módulo: `tienda.clientes`"
+      x-actor: staff
+      x-required-scopes: [tienda.clientes.crear, tienda.clientes.editar, tienda.clientes.toggle, tienda.clientes.eliminar]
+      x-module-gate: tienda.clientes
+      x-idempotent: false
+      parameters:
+        - { name: action, in: query, required: true, schema: { type: string, enum: [listar, obtener, externos, buscar_asociados] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: tipo, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: id, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: postTiendaClientes
+      tags: [Tienda]
+      summary: CRUD de clientes de tienda
+      description: "**Restricciones.** Scope: `tienda.clientes.crear`, `tienda.clientes.editar`, `tienda.clientes.toggle`, `tienda.clientes.eliminar` · Módulo: `tienda.clientes` · Requiere `X-Idempotency-Key` · `?action=guardar|toggle|eliminar` (JSON)."
+      x-actor: staff
+      x-required-scopes:
+        - tienda.clientes.crear
+        - tienda.clientes.editar
+        - tienda.clientes.toggle
+        - tienda.clientes.eliminar
+      x-module-gate: tienda.clientes
+      x-idempotent: true
+      x-restrictions: "`?action=guardar|toggle|eliminar` (JSON)."
+      parameters:
+        - { name: action, in: query, required: true, schema: { type: string, enum: [guardar, toggle, eliminar] } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: integer }
+                tipo: { type: string }
+                cedula: { type: string }
+                nit_cedula: { type: string }
+                nombre: { type: string }
+                telefono: { type: string }
+                email: { type: string }
+                estado_activo: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /convenios/guardar.php:
+    post:
+      operationId: postConveniosGuardar
+      tags: [Convenios]
+      summary: Crear/editar convenio o producto
+      description: "**Restricciones.** Scope: `convenios.index.crear`, `convenios.index.editar` · Módulo: `convenios.admin` · Requiere `X-Idempotency-Key` · `?ent=convenio|producto`; multipart con `imagen`. `id` > 0 → editar."
+      x-actor: staff
+      x-required-scopes: [convenios.index.crear, convenios.index.editar]
+      x-module-gate: convenios.admin
+      x-idempotent: true
+      x-restrictions: "`?ent=convenio|producto`; multipart con `imagen`. `id` > 0 → editar."
+      parameters:
+        - { name: ent, in: query, required: true, schema: { type: string, enum: [convenio, producto] } }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /convenios/toggle.php:
+    post:
+      operationId: postConveniosToggle
+      tags: [Convenios]
+      summary: Activar/inactivar convenio o producto
+      description: "**Restricciones.** Scope: `convenios.index.toggle` · Módulo: `convenios.admin` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.index.toggle]
+      x-module-gate: convenios.admin
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, ent]
+              properties:
+                id: { type: integer }
+                ent: { type: string, enum: [convenio, producto] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /convenios/eliminar.php:
+    post:
+      operationId: postConveniosEliminar
+      tags: [Convenios]
+      summary: Eliminar convenio o producto
+      description: "**Restricciones.** Scope: `convenios.index.eliminar` · Módulo: `convenios.admin` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.index.eliminar]
+      x-module-gate: convenios.admin
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, ent]
+              properties:
+                id: { type: integer }
+                ent: { type: string, enum: [convenio, producto] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/guardar.php:
+    post:
+      operationId: postBoletasGuardar
+      tags: [Boletas]
+      summary: Crear boleta (stock)
+      description: "**Restricciones.** Scope: `convenios.stock.crear` · Módulo: `convenios.boletas` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear]
+      x-module-gate: convenios.boletas
+      x-idempotent: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [producto_id, serial]
+              properties:
+                producto_id: { type: integer }
+                serial: { type: string }
+                numero_factura: { type: string }
+                fecha_vencimiento: { type: string, format: date }
+                precio_compra: { type: number }
+                precio_venta: { type: number }
+                archivo: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/vender.php:
+    post:
+      operationId: postBoletasVender
+      tags: [Boletas]
+      summary: Vender boleta
+      description: "**Restricciones.** Scope: `convenios.stock.vender` · Módulo: `convenios.boletas` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.vender]
+      x-module-gate: convenios.boletas
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, cedula, metodo_venta]
+              properties:
+                id: { type: integer }
+                cedula: { type: string }
+                metodo_venta: { type: string }
+                financiero:
+                  type: object
+                  properties:
+                    tipo: { type: string }
+                    numero: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/anular.php:
+    post:
+      operationId: postBoletasAnular
+      tags: [Boletas]
+      summary: Anular boleta
+      description: "**Restricciones.** Scope: `convenios.stock.anular` · Módulo: `convenios.boletas` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.anular]
+      x-module-gate: convenios.boletas
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties: { id: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/contabilizar.php:
+    post:
+      operationId: postBoletasContabilizar
+      tags: [Boletas]
+      summary: Contabilizar boleta
+      description: "**Restricciones.** Scope: `convenios.stock.contabilizar` · Módulo: `convenios.boletas` · Requiere `X-Idempotency-Key`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.contabilizar]
+      x-module-gate: convenios.boletas
+      x-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: integer }
+                comprobante: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ── Lecturas de descubrimiento (GET) ────────────────────────────────
+  /cobranza/compromisos.php:
+    get:
+      operationId: getCobranzaCompromisos
+      tags: [Cobranza]
+      summary: Listar compromisos de pago del asociado
+      description: "Devuelve {rows,total,limit,offset}. Filtra por cédula. — **Restricciones.** Scope: `cobranza.lista.comunicar`, `cobranza.lista.indagar`, `cobranza.lista.adjuntar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar, cobranza.lista.indagar, cobranza.lista.adjuntar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: cedula, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cobranza/comunicaciones.php:
+    get:
+      operationId: getCobranzaComunicaciones
+      tags: [Cobranza]
+      summary: Listar comunicaciones del asociado
+      description: "**Restricciones.** Scope: `cobranza.lista.comunicar`, `cobranza.lista.indagar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar, cobranza.lista.indagar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: cedula, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cobranza/indagaciones.php:
+    get:
+      operationId: getCobranzaIndagaciones
+      tags: [Cobranza]
+      summary: Listar indagaciones del asociado
+      description: "**Restricciones.** Scope: `cobranza.lista.indagar`, `cobranza.lista.comunicar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.indagar, cobranza.lista.comunicar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: cedula, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /cobranza/tipos.php:
+    get:
+      operationId: getCobranzaTipos
+      tags: [Cobranza]
+      summary: Catálogo de tipos/estados de comunicación
+      description: "**Restricciones.** Scope: `cobranza.lista.comunicar`, `cobranza.lista.indagar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar, cobranza.lista.indagar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: opciones, in: query, schema: { type: integer, enum: [1] } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /pagos/listar.php:
+    get:
+      operationId: getPagosListar
+      tags: [Pagos]
+      summary: Listar pagos PSE o Confiar
+      description: "`q` busca cédula/nombre/referencia. Devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `pagos.conciliar`, `pagos.confirmar`, `pagos.upload` · Módulo: `oficina.transacciones`"
+      x-actor: staff
+      x-required-scopes: [pagos.conciliar, pagos.confirmar, pagos.upload]
+      x-module-gate: oficina.transacciones
+      x-idempotent: false
+      parameters:
+        - { name: tipo, in: query, schema: { type: string, enum: [pse, confiar], default: pse } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: conciliado, in: query, schema: { type: string } }
+        - { name: asignacion, in: query, schema: { type: string } }
+        - { name: fecha_desde, in: query, schema: { type: string, format: date } }
+        - { name: fecha_hasta, in: query, schema: { type: string, format: date } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/listar.php:
+    get:
+      operationId: getCreditosListar
+      tags: [Créditos]
+      summary: Listar solicitudes de crédito
+      description: "`q` busca número de solicitud, cédula o nombre; `cedula` filtra exacto por cédula/documento. Devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `creditos.nueva_solicitud.crear`, `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.campos` · Módulo: `creditos`"
+      x-actor: staff
+      x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas, creditos.gestionar_solicitud.campos]
+      x-module-gate: creditos
+      x-idempotent: false
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: cedula, in: query, schema: { type: string }, description: "Cédula o número de identificación (exacto)" }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: etapa, in: query, schema: { type: string } }
+        - { name: order, in: query, schema: { type: string, default: id } }
+        - { name: dir, in: query, schema: { type: string, default: DESC } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/detalle.php:
+    get:
+      operationId: getCreditosDetalle
+      tags: [Créditos]
+      summary: Detalle de una solicitud de crédito
+      description: "**Restricciones.** Scope: `creditos.nueva_solicitud.crear`, `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.campos` · Módulo: `creditos`"
+      x-actor: staff
+      x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas, creditos.gestionar_solicitud.campos]
+      x-module-gate: creditos
+      x-idempotent: false
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /creditos/config.php:
+    get:
+      operationId: getCreditosConfig
+      tags: [Créditos]
+      summary: Configuración/campos del crédito
+      description: "**Restricciones.** Scope: `creditos.nueva_solicitud.crear`, `creditos.gestionar_solicitud.etapas` · Módulo: `creditos`"
+      x-actor: staff
+      x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas]
+      x-module-gate: creditos
+      x-idempotent: false
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /creditos/lineas.php:
+    get:
+      operationId: getCreditosLineas
+      tags: [Créditos]
+      summary: Líneas de crédito
+      description: "**Restricciones.** Scope: `creditos.nueva_solicitud.crear`, `creditos.gestionar_solicitud.etapas` · Módulo: `creditos`"
+      x-actor: staff
+      x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas]
+      x-module-gate: creditos
+      x-idempotent: false
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /convenios/listar.php:
+    get:
+      operationId: getConveniosListar
+      tags: [Convenios]
+      summary: Listar convenios o productos
+      description: "`ent=convenios|productos`; `q` busca nombre/descripción. Devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `convenios.index.crear`, `convenios.index.editar`, `convenios.index.toggle`, `convenios.index.eliminar` · Módulo: `convenios.admin`"
+      x-actor: staff
+      x-required-scopes: [convenios.index.crear, convenios.index.editar, convenios.index.toggle, convenios.index.eliminar]
+      x-module-gate: convenios.admin
+      x-idempotent: false
+      parameters:
+        - { name: ent, in: query, schema: { type: string, enum: [convenios, productos], default: convenios } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string } }
+        - { name: convenio_id, in: query, schema: { type: integer } }
+        - { name: tipo, in: query, schema: { type: string } }
+        - { name: order, in: query, schema: { type: string, default: nombre } }
+        - { name: dir, in: query, schema: { type: string, default: ASC } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /convenios/obtener.php:
+    get:
+      operationId: getConveniosObtener
+      tags: [Convenios]
+      summary: Obtener un convenio o producto por id
+      description: "**Restricciones.** Scope: `convenios.index.crear`, `convenios.index.editar`, `convenios.index.toggle`, `convenios.index.eliminar` · Módulo: `convenios.admin`"
+      x-actor: staff
+      x-required-scopes: [convenios.index.crear, convenios.index.editar, convenios.index.toggle, convenios.index.eliminar]
+      x-module-gate: convenios.admin
+      x-idempotent: false
+      parameters:
+        - { name: ent, in: query, required: true, schema: { type: string, enum: [convenio, producto] } }
+        - { name: id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /boletas/listar.php:
+    get:
+      operationId: getBoletasListar
+      tags: [Boletas]
+      summary: Listar boletas (stock)
+      description: "`q` busca serial, factura, asociado o producto. Devuelve {rows,total,limit,offset}. — **Restricciones.** Scope: `convenios.stock.crear`, `convenios.stock.anular`, `convenios.stock.vender`, `convenios.stock.contabilizar` · Módulo: `convenios.boletas`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear, convenios.stock.anular, convenios.stock.vender, convenios.stock.contabilizar]
+      x-module-gate: convenios.boletas
+      x-idempotent: false
+      parameters:
+        - { name: producto_id, in: query, schema: { type: integer } }
+        - { name: estados, in: query, schema: { type: array, items: { type: string, enum: [disponible, vendida, contabilizada, anulada] } } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: cedula, in: query, schema: { type: string } }
+        - { name: fecha_creacion_desde, in: query, schema: { type: string, format: date } }
+        - { name: fecha_creacion_hasta, in: query, schema: { type: string, format: date } }
+        - { name: fecha_vendida_desde, in: query, schema: { type: string, format: date } }
+        - { name: fecha_vendida_hasta, in: query, schema: { type: string, format: date } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/resumen.php:
+    get:
+      operationId: getBoletasResumen
+      tags: [Boletas]
+      summary: KPIs y productos de boletas
+      description: "**Restricciones.** Scope: `convenios.stock.crear`, `convenios.stock.anular`, `convenios.stock.vender`, `convenios.stock.contabilizar` · Módulo: `convenios.boletas`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear, convenios.stock.anular, convenios.stock.vender, convenios.stock.contabilizar]
+      x-module-gate: convenios.boletas
+      x-idempotent: false
+      parameters:
+        - { name: producto_id, in: query, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/eventos.php:
+    get:
+      operationId: getBoletasEventos
+      tags: [Boletas]
+      summary: Timeline/eventos de una boleta
+      description: "**Restricciones.** Scope: `convenios.stock.crear`, `convenios.stock.anular`, `convenios.stock.vender`, `convenios.stock.contabilizar` · Módulo: `convenios.boletas`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear, convenios.stock.anular, convenios.stock.vender, convenios.stock.contabilizar]
+      x-module-gate: convenios.boletas
+      x-idempotent: false
+      parameters:
+        - { name: boleta_id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { $ref: '#/components/responses/OkRows' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/existe.php:
+    get:
+      operationId: getBoletasExiste
+      tags: [Boletas]
+      summary: Verificar si existe un serial para un producto
+      description: "**Restricciones.** Scope: `convenios.stock.crear`, `convenios.stock.vender` · Módulo: `convenios.boletas`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear, convenios.stock.vender]
+      x-module-gate: convenios.boletas
+      x-idempotent: false
+      parameters:
+        - { name: producto_id, in: query, required: true, schema: { type: integer } }
+        - { name: serial, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/OkData' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /boletas/descargar_reporte.php:
+    get:
+      operationId: getBoletasDescargarReporte
+      tags: [Boletas]
+      summary: Exportar reporte de boletas (Excel)
+      description: "**Restricciones.** Scope: `convenios.stock.crear`, `convenios.stock.anular`, `convenios.stock.vender`, `convenios.stock.contabilizar` · Módulo: `convenios.boletas`"
+      x-actor: staff
+      x-required-scopes: [convenios.stock.crear, convenios.stock.anular, convenios.stock.vender, convenios.stock.contabilizar]
+      x-module-gate: convenios.boletas
+      x-idempotent: false
+      parameters:
+        - { name: accion, in: query, schema: { type: string, enum: [boletas, vendidas] } }
+      responses:
+        '200':
+          description: Archivo Excel (.xlsx)
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Authorization: Bearer <secreto>"
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: "Alternativa a Authorization"
+  parameters:
+    IdempotencyKey:
+      name: X-Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string }
+      description: "UUID único por intento (evita duplicados)"
+    ActingAsCedula:
+      name: X-Acting-As-Cedula
+      in: header
+      required: false
+      schema: { type: string }
+      description: "Cédula a impersonar (requiere scope portal.actuar)"
+  schemas:
+    Ok:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        data: {}
+    RowsList:
+      type: object
+      description: Envoltura estándar de listados paginados.
+      properties:
+        ok: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items: { type: object, additionalProperties: true }
+            total: { type: integer, example: 128 }
+            limit: { type: integer, example: 20 }
+            offset: { type: integer, example: 0 }
+    ObjectData:
+      type: object
+      description: Envoltura estándar de recurso único (detalle / obtener).
+      properties:
+        ok: { type: boolean, example: true }
+        data: { type: object, additionalProperties: true }
+    Error:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string }
+  responses:
+    Ok:
+      description: Operación exitosa
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Ok' }
+    OkRows:
+      description: Listado paginado exitoso (`{ rows, total, limit, offset }`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RowsList' }
+    OkData:
+      description: Recurso único exitoso
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ObjectData' }
+    BadRequest:
+      description: Datos inválidos o falta X-Idempotency-Key
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: "Falta header X-Idempotency-Key para operaciones de mutación." }
+    Unauthorized:
+      description: Sin token / token inválido, revocado o expirado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: "Token inválido" }
+    Forbidden:
+      description: Token válido sin permiso (rol/allowlist/scopes) o requiere HTTPS
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: "Token sin permiso para esta operación" }
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Idempotencia en uso / operación en proceso
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit por token excedido
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: "Límite de solicitudes excedido. Intente de nuevo en unos segundos." }

@@ -232,59 +232,80 @@ La preservación de la información histórica es un requisito obligatorio y tie
 
 > La **política** de migración es la de arriba (cero pérdida, trazabilidad, integridad de ids). Aquí el estado **ejecutado** por el migrador v1→v2 (one-use, trunca y re-inserta; fuente `multi_app_legacy`, destino `multi_app_v2`).
 
-## Bloques migrados (12)
+## Bloques migrados (11) — las solicitudes NO se migran
+
+> **Solicitudes (PQRS, tickets, etc.)**: NO se migran. En v2 se crean desde cero. El migrador trae datos base + **fábrica de créditos**.
 
 | Bloque | Contenido | Cifras |
 |---|---|---|
-| 1 | `control_usuarios` → `usuarios` (ids preservados + bootstrap admin) | 13 |
-| 2–6 | `asociados_control` · `productos`/`cláusulas` → `productos` · asignaciones → `asociados_productos` · comisiones/redenciones → `movimientos_multi` · `control_logs` → `logs` | 647 · 8 · 1.032 · 14 · 24.513 |
-| 7 | pagos/transacciones (PSE/Confiar/conciliación/confirmación → `pagos_*`,`transacciones_*`) | 1.807 · 3.141 · 1.482 · 1.269 (466 comprobantes) · trx 2.721+8.346 |
-| 8 | `cobranza_*` → `cobranza_*` | 2.230 comunicaciones · 3 indagaciones · 92 remisiones |
-| 9 | Créditos: `control_tasas_creditos` → `credito_lineas`; `credito_docs_solicitudes` → `credito_solicitudes`; `credito_docs_documentos` → `credito_documentos` (+ **482 archivos copiados**) | 25 líneas · 160 sol. · 1.483 docs · 36 config |
-| 10 | Convenios + Boletería (unificados): `convenios`, `convenios_productos` (+12 productos-boleta por mapeo por nombre), `boleteria_boletas`/`eventos` | 33 · 69+12 · 395 boletas (158 archivos) · 992 eventos |
-| 11 | **Tienda SOLO catálogo** (decisión del líder): `tienda_categorias/marcas/productos/rangos/clientes/promociones` | 23 · 23 · 567 (0 fotos/548 sin físico) · 17 rangos · 44 clientes · 12 promo |
-| 12 | **Solicitudes unificadas (B7)**: `cx_solicitudes`(+comentarios) → `solicitudes`+detalle tipado · `control_calificaciones` → `solicitudes_calificaciones` · `ticketera_*` → tipo `ticket` (cabecera + eventos + adjuntos) | 98 solicitudes · 14 comentarios · 79 calificaciones · 220 tickets · 863 eventos · 9 adjuntos |
+| 1 | `control_usuarios` → `usuarios` (ids preservados; incluye admin) | 12 |
+| 2–6 | `asociados_control` · `productos`/`cláusulas` → `productos` · asignaciones → `asociados_productos` · comisiones/redenciones → `movimientos_multi` · `control_logs` → `logs` | 660 · 8 · 1.062 · 18 · 32.472 |
+| 7 | pagos/transacciones (PSE/Confiar/conciliación/confirmación → `pagos_*`,`transacciones_*`) | pse 2.212 · confiar 3.820 · confirmación 1.623 · conciliación 1.812 · trx 3.398+10.379 |
+| 8 | `cobranza_*` → `cobranza_*` (estados y tipos normalizados a slug) | 2.857 com. · 2.806 mora · 4.358 mora-crédito · 3 indag. · 3 adj. · 122 remis. |
+| 9 | **Créditos (fábrica)**: `control_tasas_creditos` → `credito_lineas`; `credito_docs_solicitudes` → `credito_solicitudes`; **variables EAV** (`credito_campos_valores`); `credito_docs_documentos` → `credito_documentos` con archivo opaco | 25 líneas · 226 sol. · 1.484 variables · 2.057 docs |
+| 10 | Convenios + Boletería: `convenios`, `convenios_productos` (+12 productos-boleta por nombre), `boleteria_boletas`/`eventos` | 33 · 69+12 · 451 boletas · 1.384 eventos |
+| 11 | **Tienda SOLO catálogo**: `tienda_categoria/marca/producto/clientes/promociones` | 24 · 29 · 598 · 44 · 15 |
+
+## Créditos: mapeo de variables y archivos
+
+- **Variables (EAV)**: las columnas tipadas de `credito_docs_solicitudes` se vuelcan a `credito_campos_valores` usando `CreditoService::CAMPOS_TIPADOS` (`monto_aprobado`, `linea_aprobada`→`linea_credito_aprobada_id`, `cuotas_aprobadas`, `codeudor_aprobado`, `desea_codeudor`, `tipo_codeudor`, `base_aportes`, `fianza`, `prestamos_recoger`, `dto_papeleria`, `numero_sifone`→`numero_credito_sifone`, `fecha_desembolso`, `valor_desembolso`→`valor_real_desembolso`, `desembolsado_a_pac`→`desembolsado_pac`). Las aceptaciones (`acepta_tratamiento_datos`, `acepta_ofertas_comerciales`) se resuelven **por `clave`** contra `credito_config_aceptacion`.
+- **Archivos**: se toma el archivo de `...serve_file.php?f=.../creditos_docs/YYYY/MM/<archivo>`, se copia a `uploads/creditos/` y se renombra a la convención de la app `cred_<solicitudId>_<clave>.<ext>` (la misma de `CreditoService::documentoGuardar`); `ruta_archivo` guarda ese nombre. Si el físico no está en `--files-src`, la fila se registra igual (metadata + ruta) y se reporta como faltante.
+- **Config** (secciones/campos/documentos/aceptaciones) y **rangos de precio de tienda** vienen del `sql/ddl.sql` (no se migran).
+
+## Uso del migrador (`sql/migrar_v1_a_v2.py`)
+
+```bash
+# Todo (BD nueva; usar --reset en re-ejecuciones)
+python sql/migrar_v1_a_v2.py --reset
+
+# Solo créditos (re-ejecuta la fábrica sin tocar las solicitudes nuevas de v2)
+python sql/migrar_v1_a_v2.py --only=creditos --reset
+
+# Archivos físicos del legacy (el directorio que contiene creditos_docs/, recibos/, ...)
+python sql/migrar_v1_a_v2.py --reset --files-src=/ruta/al/legacy/uploads
+
+# Variables de BD por entorno (dev/test/prod)
+DB_SRC_HOST=... DB_SRC_PORT=... DB_SRC_NAME=multi_app_legacy \
+DB_DST_HOST=... DB_DST_PORT=... DB_DST_NAME=multi_app_v2 \
+python sql/migrar_v1_a_v2.py --reset
+```
+
+Bloques para `--only`: `usuarios, asociados, productos, asignaciones, movimientos, logs, pagos, cobranza, creditos, convenios, tienda`.
 
 ## Notas de estado
-- **Crédito/B7a**: 482 archivos físicos copiados (ruta legacy resuelta en la migración). **Solicitudes (B7)**: motor + tipos construidos y **migración histórica (bloque 12) ejecutada y validada** (98 solicitudes CX + 220 tickets + 79 calificaciones + 14 comentarios + 863 eventos + 9 adjuntos, 0 FKs huérfanos).
+- **Solicitudes**: el bloque histórico (`cx_solicitudes`, `ticketera_*`) **se retiró**: en v2 se crean desde cero.
+- **Créditos**: la re-ejecución preserva las solicitudes nuevas de v2 (`origen_id IS NULL`); solo borra/reinserta las migradas (`origen_tabla='credito_docs_solicitudes'`).
 - **Storage (R2)**: los archivos de `créditos`, `pagos`, `boletas`, `solicitudes`, `cobranza`, `fondo` se migran a Cloudflare R2 (`scripts/migrar_r2.php`, idempotente); `tienda`, `cargas`, `convenios` quedan **locales**.
-- **Tienda transaccional** (compras/stock/ventas/reversiones/bonos) y **solicitudes históricas** son los pendientes de migración adicionales si el liderazgo los solicita.
-- **Integridad de ids**: `usuarios.id` y `productos.id` se preservan; el script cierra con **chequeo de FKs huérfanos** que invalida la migración ante roturas.
+- **Integridad de ids**: `usuarios.id` y `productos.id` se preservan.
 
 ---
 
-## Validación local (Windows, 2026-10-15) — 12/12 bloques ejecutados ✅
+## Validación local (Windows) — 11 bloques (sin solicitudes) ✅
 
 La migración completa se **ejecutó y validó en local** (Windows + MariaDB 11.8.9, misma versión que
-Hostinger), con **0 FKs huérfanos** y login `admin` verificado. El detalle del entorno Windows (MariaDB en
-puerto 3307) está en el `README.md`.
+Hostinger) y login `admin` verificado. El detalle del entorno Windows (MariaDB en puerto 3307) está en el
+`README.md`.
 
-### Correcciones al migrador (bug de bloque 12, que estaba "anexado sin ejecutar")
-
-1. **`src` reasignado** — el bloque 7 (pagos) reasignaba `src` (la conexión) a una ruta de archivo; el bloque 12
-   la usaba como conexión → `AttributeError`. Se abrió una **conexión fresca** (`src12`) en el bloque 12.
-2. **`responsable_id` huérfano** — 8 solicitudes del legacy apuntaban al usuario `id=6`, **eliminado** de
-   `control_usuarios`. Ahora se **anula a NULL** cuando el responsable no existe en `usuarios`.
-3. **`categoria_id` de tickets** — el seed de `ddl.sql` usa ids compactos (1..15) mientras el legacy tiene huecos
-   y categorías nuevas. Se re-mapea **por nombre normalizado** (no por id): las categorías del legacy que no existen
-   en el seed se **insertan automáticamente** con un id nuevo, y `NULL` se conserva en `NULL`. Incluye normalización
-   de la errata `REVERCION`→`REVERSION`.
-4. **Referencias a usuarios borrados** (aparecieron con el backup actualizado, que eliminó los usuarios 10 y 11):
-   la cobranza (`creado_por`) y otras tablas seguían apuntando a esos usuarios. Se añadió una **limpieza general**
-   antes del chequeo de FKs que anula a NULL toda columna de referencia a `usuarios.id` inexistente
-   (`creado_por`, `*_por`, `usuario_id`, `responsable_id`, `asignado_por`, `respondido_por`, etc.).
+- **Re-ejecución de créditos** (2026-10-20): `--only=creditos --reset` → 226 solicitudes migradas,
+  **1.484 variables EAV** y **2.057 documentos** con ruta opaca; las solicitudes nuevas de v2
+  (`origen_id IS NULL`) se conservaron.
+- **Normalizaciones del migrador**: estados y tipos de cobranza a slug; `cedula_asociado` toma
+  `numero_identificacion` cuando viene vacía; referencias a usuarios inexistentes se anulan a `NULL`
+  (`logs.id_usuario`, `pagos_confirmacion.rechazado_por`, `transacciones.usuario_id`).
+- **DDL**: `credito_lineas` se crea antes de `vw_creditos` (la vista lo referencia); sin eso, cargar
+  `sql/ddl.sql` en una BD nueva fallaba.
 
 ### Nota: datos Sifone (fuera de la migración)
 
-Las tablas `sifone_*` **no forman parte de la migración**: son la fuente maestra importada por el módulo **"Cargas
-de archivos"** (`core/import/SifoneImporter`) desde los Excel de Sifone. Para validar en local se cargaron los 7
-archivos (asociados 613 · cartera aseguradora 249 · cartera mora 90 · balance 2.596 · movimientos 4.943 · datacredito
-3.038 · estado_cuenta 250).
+Las tablas `sifone_*` **no forman parte de la migración**: son la fuente maestra importada por el módulo
+**"Cargas de archivos"** (`core/import/SifoneImporter`) desde los Excel de Sifone. Para validar en local se
+cargaron los 7 archivos (asociados 613 · cartera aseguradora 249 · cartera mora 90 · balance 2.596 ·
+movimientos 4.943 · datacredito 3.038 · estado_cuenta 250).
 
 ### Pendiente (archivos físicos)
 
-Los **archivos físicos** del legacy (documentos de crédito, comprobantes, boletas, imágenes de convenios y fotos
-de tienda) **no se copiaron** en local: el dump legacy solo trae la base de datos, no los binarios. Esos
-archivos viven en el servidor de Hostinger y deben **descargarse por separado** antes del go-live (o asumirse su
-ausencia, como ya se documenta en `migracion_datos.md`). Conteos afectados: 1.483 docs de crédito · 466
-comprobantes · 158 boletas · 548 fotos de tienda.
+Los **archivos físicos** del legacy (documentos de crédito, comprobantes, boletas, imágenes de convenios y
+fotos de tienda) **no están en el dump**: solo la base de datos. Deben **descargarse del servidor de Hostinger**
+y pasarse con `--files-src` en la migración de dev/test/prod (no en local). Conteos afectados: 2.057 docs de
+crédito (en local solo había 5 físicos, sin match con el legado) · comprobantes de pago · boletas · fotos de
+tienda.

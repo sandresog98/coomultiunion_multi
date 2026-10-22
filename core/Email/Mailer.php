@@ -12,6 +12,13 @@ require_once dirname(__DIR__) . '/env.php';
  */
 final class Mailer
 {
+    private static string $lastError = '';
+
+    public static function lastError(): string
+    {
+        return self::$lastError;
+    }
+
     private const PHPMailer_DIRS = [
         '/opt/lampp/htdocs/projects/multi/multi_app/cx/PHPMailer',
     ];
@@ -74,12 +81,29 @@ final class Mailer
     }
 
     /**
-     * Envía un correo. Devuelve true si PHPMailer aceptó el envío.
+     * Envía un correo simple. Devuelve true si PHPMailer aceptó el envío.
      * Nunca lanza: ante cualquier fallo loguea y devuelve false.
      */
     public static function send(string $to, string $subject, string $body, ?string $fromName = null): bool
     {
+        return self::sendAdvanced($to, $subject, $body, ['fromName' => $fromName]);
+    }
+
+    /**
+     * Envío SMTP con HTML, nombre de destinatario, remitente y adjuntos.
+     *
+     * $opts:
+     *   from, fromName, toName, isHtml
+     *   attachments: [['path'=>'/ruta/archivo.pdf','name'=>'x.pdf','mime'=>'application/pdf'], ...]
+     *   headers: ['List-Unsubscribe' => '<url>', ...]
+     *
+     * Nunca lanza: devuelve false y deja el detalle en error_log.
+     */
+    public static function sendAdvanced(string $to, string $subject, string $body, array $opts = []): bool
+    {
+        self::$lastError = '';
         if (!static::disponible() || !static::isConfigured()) {
+            self::$lastError = 'SMTP no configurado o PHPMailer ausente.';
             error_log('[mailer] SMTP no configurado o PHPMailer ausente; envío omitido.');
             return false;
         }
@@ -96,19 +120,46 @@ final class Mailer
             $mail->Port       = static::port();
             $mail->CharSet    = 'UTF-8';
             $mail->Encoding   = 'base64';
+            // HELO/Message-ID con el dominio del remitente (mejor entregabilidad
+            // que usar el hostname interno del servidor web).
+            $helo = trim((string) env('SMTP_HELO', '')) ?: static::host();
+            if ($helo !== '') {
+                $mail->Hostname = $helo;
+            }
 
-            $isHtml = stripos((string) $body, '<html') !== false || stripos((string) $body, '<body') !== false;
-            $mail->setFrom(static::from(), $fromName ?: 'Coomultiunion');
-            $mail->addAddress($to);
+            $isHtml = (bool) ($opts['isHtml'] ?? (stripos($body, '<html') !== false || stripos($body, '<body') !== false));
+            $mail->setFrom((string) ($opts['from'] ?? static::from()), (string) ($opts['fromName'] ?? 'Coomultiunion'));
+            $mail->addAddress($to, (string) ($opts['toName'] ?? ''));
             $mail->isHTML($isHtml);
             $mail->Subject = $subject;
             $mail->Body    = $body;
-            if (!$isHtml) {
+            if (!empty($opts['altBody'])) {
+                $mail->AltBody = (string) $opts['altBody'];
+            } elseif (!$isHtml) {
                 $mail->AltBody = strip_tags($body);
             }
+
+            foreach (($opts['headers'] ?? []) as $name => $value) {
+                if (is_string($name) && $name !== '' && is_scalar($value)) {
+                    $mail->addCustomHeader($name, (string) $value);
+                }
+            }
+
+            foreach (($opts['attachments'] ?? []) as $a) {
+                if (!is_array($a)) { continue; }
+                $name = (string) ($a['name'] ?? 'adjunto');
+                $mime = (string) ($a['mime'] ?? 'application/octet-stream');
+                if (!empty($a['path']) && is_file((string) $a['path'])) {
+                    $mail->addAttachment((string) $a['path'], $name, 'base64', $mime);
+                } elseif (isset($a['content'])) {
+                    $mail->addStringAttachment((string) $a['content'], $name, 'base64', $mime);
+                }
+            }
+
             $mail->send();
             return true;
         } catch (\Throwable $e) {
+            self::$lastError = $e->getMessage();
             error_log('[mailer] error de envío a ' . $to . ': ' . $e->getMessage());
             return false;
         }

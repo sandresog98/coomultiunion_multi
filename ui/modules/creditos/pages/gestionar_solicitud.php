@@ -93,7 +93,21 @@ function money(v){return Number(v||0).toLocaleString('es-CO',{maximumFractionDig
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
 function flag(m){if(m)alert(m);}
 
+let RENDER_CACHE=null, RENDER_PROMISE=null;
+async function renderAllData(){
+  if(RENDER_CACHE!==null) return RENDER_CACHE;
+  if(RENDER_PROMISE) return RENDER_PROMISE;   // dedupe llamadas concurrentes
+  const url='creditos/render?seccion=all&canal=staff&tipo_solicitante='+encodeURIComponent(S.tipo_solicitante||'');
+  RENDER_PROMISE=(async()=>{
+    for(let i=0;i<3;i++){
+      try{ RENDER_CACHE=await api(url); return RENDER_CACHE; }
+      catch(e){ if(i===2) throw e; await new Promise(r=>setTimeout(r,300*(i+1))); }
+    }
+  })();
+  try{ return await RENDER_PROMISE; } finally { RENDER_PROMISE=null; }
+}
 async function cargar(){
+  RENDER_CACHE=null; RENDER_PROMISE=null;
   try{
     S=await api('creditos/detalle?id='+SID);
   }catch(e){
@@ -116,9 +130,11 @@ async function cargar(){
   h+=`<h6 class="mt-4 fw-semibold"><i class="fas fa-layer-group me-1"></i>Secciones del flujo</h6>`;
   h+=`<div class="accordion mt-2" id="secAcord"></div>`;
   b.innerHTML=h;
-  const ps=[SEC_ETAPAS?renderControlEtapas():Promise.resolve(), renderSolicitante()];
-  if(SEC_ACEPT)ps.push(renderAceptaciones());
-  await Promise.all(ps);
+  // Secuencial a propósito: evita conexiones BD concurrentes desde la misma
+  // página (algunos entornos locales rechazan SYNs concurrentes) y acelera la carga.
+  try{ renderControlEtapas(); }catch(e){}
+  await Promise.allSettled([renderSolicitante()]);
+  if(SEC_ACEPT) await Promise.allSettled([renderAceptaciones()]);
   await renderSecciones();
 }
 async function renderSolicitante(){
@@ -166,7 +182,7 @@ async function confirmarEtapaNext(){
 }
 async function renderSecciones(){
   const box=document.getElementById('secAcord');
-  const r=await api('creditos/render?seccion=all&canal=staff&tipo_solicitante='+encodeURIComponent(S.tipo_solicitante||''));
+  const r=await renderAllData();
   const grupos=(r.secciones||[]).filter(g=>g.seccion&&g.seccion.ocasion&&g.seccion.ocasion!=='aceptacion');
   if(!grupos.length){box.innerHTML='<div class="text-muted small">Sin secciones configuradas.</div>';return;}
   box.innerHTML='';let idx=0;
@@ -250,7 +266,7 @@ async function eliminarDoc(id,nom){if(!confirm(`¿Eliminar el documento "${nom}"
   try{await api('creditos/documento',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});cargar();}catch(e){flag(e.message);}}
 async function renderAceptaciones(){
   const cont=document.getElementById('aceptacionResumen');
-  const d=await api('creditos/render?seccion=aceptacion&canal=staff');const list=d.aceptaciones||[];
+  const d=await renderAllData();const list=d.aceptaciones||[];
   const ok=(S.aceptado_por_asociado||list.some(a=>{const v=S.aceptaciones.find(x=>x.config_aceptacion_id===a.id);return v&&v.valor==='1';}));
   const chks=list.map(a=>{const v=S.aceptaciones.find(x=>x.config_aceptacion_id===a.id);const okk=v&&v.valor==='1';
     return `<span class="badge ${okk?'text-bg-success':'text-bg-light border text-muted'}" title="${esc(a.titulo||'')}">${okk?'✓':'✕'} ${esc(a.titulo?a.titulo.split(' ').slice(0,4).join(' '):'item')}</span>`;}).join(' ');

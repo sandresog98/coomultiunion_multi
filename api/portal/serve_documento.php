@@ -7,6 +7,7 @@ Http::requireMethod('GET');
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) Http::fail('Falta el id.');
 $d = $portal->documentoGet($id, $actor['cedula']);
+Logger::descarga($actor['cedula'], 'portal.documentos', 'Documento #' . $id);
 try {
     // MIME derivado de la extensión (nunca del tipo_mime de BD, que puede venir del cliente).
     $rutaDoc = (string) $d['ruta_archivo'];

@@ -17,7 +17,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
   <form id="acForm">
     <div class="form-check mb-2">
       <input class="form-check-input" type="checkbox" id="habeas">
-      <label class="form-check-label small" for="habeas">Autorizo el tratamiento de datos personales y consulta en centrales de riesgo (Ley 1581 de 2012) <span class="text-danger">*</span></label>
+      <label class="form-check-label small" for="habeas">Autorizo el tratamiento de datos personales y consulta en centrales de riesgo (Ley 1581 de 2012) <span class="text-danger">*</span> · <a href="<?= $APP ?>/privacidad" target="_blank" rel="noopener">Política de datos</a></label>
     </div>
     <div class="form-check mb-2">
       <input class="form-check-input" type="checkbox" id="ofertas">

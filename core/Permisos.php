@@ -147,4 +147,89 @@ final class Permisos
         }
         return $out;
     }
+
+    /**
+     * Catálogo único de claves de 'acciones' (todas las operaciones declaradas).
+     * Lo usa la UI de API para ofrecer qué endpoints se pueden autorizar por token.
+     * @return string[]
+     */
+    public static function catalogoAcciones(): array
+    {
+        $out = [];
+        foreach (self::cfg()['acciones'] ?? [] as $map) {
+            foreach (array_keys($map) as $clave) {
+                if ($clave !== '*') {
+                    $out[$clave] = true;
+                }
+            }
+        }
+        $keys = array_keys($out);
+        sort($keys);
+        return $keys;
+    }
+
+    /**
+     * Catálogo único de módulos declarados (para scopes de solo lectura).
+     * @return string[]
+     */
+    public static function catalogoModulos(): array
+    {
+        $out = [];
+        foreach (self::roles() as $lista) {
+            foreach ($lista as $m) {
+                if ($m !== '*') {
+                    $out[$m] = true;
+                }
+            }
+        }
+        $keys = array_keys($out);
+        sort($keys);
+        return $keys;
+    }
+
+    /**
+     * Módulo-gate que un token debe resolver para ejecutar una operación cuyo prefijo
+     * NO coincide textualmente con el módulo del endpoint (mapa explícito).
+     * Ej.: 'asociados.detalle.asignar' → 'oficina.asociados'. Si no aplica, null
+     * (el propio prefijo de la acción ya cubre el módulo en la comprobación de scopes).
+     *
+     * Nota: es la única correspondencia que no se puede derivar por prefijo; si se
+     * agrega una operación de este tipo, añadirla aquí.
+     *
+     * @return string[] mapa prefijo-acción => módulo-gate
+     */
+    public static function mapaModuloRequerido(): array
+    {
+        return [
+            'asociados.detalle' => 'oficina.asociados',
+            'pagos'             => 'oficina.transacciones',
+            'movimientos'       => 'oficina.transacciones',
+            'convenios.index'   => 'convenios.admin',
+            'convenios.stock'   => 'convenios.boletas',
+        ];
+    }
+
+    /**
+     * Scopes ESPECIALES de token (no son gates de módulo/acción; se comprueban
+     * explícitamente en el endpoint). Deben autorizarse en la allowlist para poder
+     * asignarse a un token.
+     * @return string[]
+     */
+    public static function catalogoScopesEspeciales(): array
+    {
+        return [
+            'portal.actuar',   // actuar en nombre de una cédula (X-Acting-As-Cedula)
+        ];
+    }
+
+    /** Módulo-gate requerido por una operación (o null si el prefijo ya lo cubre). */
+    public static function moduloRequerido(string $accion): ?string
+    {
+        foreach (self::mapaModuloRequerido() as $prefijo => $modulo) {
+            if ($accion === $prefijo || str_starts_with($accion, $prefijo . '.')) {
+                return $modulo;
+            }
+        }
+        return null;
+    }
 }

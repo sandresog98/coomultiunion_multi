@@ -255,6 +255,15 @@ final class PortalAuth
     /** Sesión del portal válida (o null), con timeout de inactividad 3600s. */
     public static function actor(): ?array
     {
+        // Impersonación por token (Fase 3): un token con el scope 'portal.actuar'
+        // + header X-Acting-As-Cedula opera como ese asociado (aislado por cédula).
+        if (class_exists('TokenAuth', false) && TokenAuth::active()
+            && TokenAuth::hasScope('portal.actuar')) {
+            $ced = trim((string) ($_SERVER['HTTP_X_ACTING_AS_CEDULA'] ?? ''));
+            if ($ced !== '') {
+                return ['tipo' => 'portal', 'cedula' => $ced, 'nombre' => '', 'email' => '', 'on_behalf' => true];
+            }
+        }
         self::boot();
         $cedula = $_SESSION['cx_cedula'] ?? null;
         if ($cedula === null || $cedula === '') {

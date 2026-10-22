@@ -60,14 +60,49 @@ multi/
 ### Módulos staff (`ui/modules/`)
 
 Usuarios · Asociados · Cargas (Sifone) · Configuración (movimientos/cobranza/productos) · Movimientos ·
-Créditos · Cobranza · Logs · Transacciones/Pagos · Tienda · Convenios/Boletería (stock) · Solicitudes (Tickets) ·
-Fondo de Bienestar (convenios) · Oficina.
+Créditos · Cobranza · **Comunicaciones (WhatsApp / SMS / email)** · Logs · Transacciones/Pagos · Tienda ·
+Convenios/Boletería (stock) · Solicitudes (Tickets) · Fondo de Bienestar (convenios) · Oficina.
+
+### Comunicaciones (Twilio + SMTP)
+
+Módulo `ui/modules/comunicaciones/` y API `api/comunicaciones/`:
+
+- Envío a un asociado, a varios asociados con opt-in o a una base CSV/XLS/XLSX, con validación de teléfono/correo y deduplicación.
+- Opt-in maestro por asociado en `asociados_control`, administrable desde el detalle del asociado (`ui/modules/asociados/pages/asociados_detalle`).
+- Asistente IA opcional para redactar mensajes o HTML en el paso 2 de la nueva comunicación (usa `SILICONFLOW_*`).
+- Planes programados (zona horaria `America/Bogota`, almacenados en UTC).
+- WhatsApp (plantillas Twilio Content, imágenes/PDF/audio/video), SMS (texto) y email por **SMTP institucional** (PHPMailer). SendGrid queda como integración opcional futura.
+- Webhooks de estado, respuestas entrantes y opt-out (`STOP`, `BAJA`, etc.).
+- Registro de estados, errores, SID de proveedor y costo real en USD.
+
+Variables y conexión: ver `.env.example` (`TWILIO_*`, `SMTP_*`, `SILICONFLOW_*`, `COM_MEDIA_SECRET`).
+Los secretos nunca se guardan en la base. En trial, WhatsApp requiere sandbox o sender aprobado y los SMS
+solo llegan a números verificados.
+
+Migraciones: `015_comunicaciones_twilio.sql` (módulo), `016_asociados_comunicaciones_opt_in.sql`
+(opt-in maestro en `asociados_control`) y `017_comunicaciones_ia_costo.sql` (costo estimado de IA por plan).
+
+Worker (Hostinger, cada 15 minutos):
+
+```cron
+*/15 * * * * /usr/bin/php /home/USUARIO/domains/DOMINIO/core/comunicaciones/worker.php --limit=200 >> /home/USUARIO/logs/comunicaciones.log 2>&1
+*/15 * * * * /usr/bin/php /home/USUARIO/domains/DOMINIO/core/comunicaciones/sync.php >> /home/USUARIO/logs/comunicaciones_sync.log 2>&1
+```
+
+Webhooks públicos (configurar el sender/Messaging Service en Twilio):
+
+- `https://DOMINIO/api/comunicaciones/webhooks/status.php`
+- `https://DOMINIO/api/comunicaciones/webhooks/inbound.php`
+- Email SendGrid (opcional futuro): `https://DOMINIO/api/comunicaciones/webhooks/sendgrid.php?k=SECRETO`
+
+La firma `X-Twilio-Signature` se valida con `TWILIO_AUTH_TOKEN`. Para adjuntos y baja de email se usan
+URLs firmadas con `COM_MEDIA_SECRET`.
 
 ### Portal (`cx/modules/`)
 
 Perfil · Aportes (resumen/extractos/movimientos/retiro) · Créditos (activos + solicitud) · Solicitudes
 (hub: PQRS, actualizar info, boletas, redención, certificados, mis solicitudes) · Fondo de Bienestar ·
-Convenios (carrito de boletas) · Notificaciones.
+Convenios (carrito de boletas) · Notificaciones · Asistente IA (chat).
 
 ---
 
@@ -130,14 +165,20 @@ php -S 127.0.0.1:8099 -t .     # luego http://127.0.0.1:8099/ui/login
 
 ### Migración de datos (legacy → v2)
 
-La política y el mapeo legacy → v2 (bloques, tablas, trazabilidad de ids y conservación histórica) están en
-[`migracion_datos.md`](./migracion_datos.md).
+La política y el mapeo legacy → v2 están en [`migracion_datos.md`](./migracion_datos.md).
 
 - El **esquema** se crea con `sql/ddl.sql` (canónico, ver §3).
+- El **migrador** es `sql/migrar_v1_a_v2.py` (Python). Migra los datos base + la **fábrica de créditos**;
+  **las solicitudes (PQRS/tickets) no se migran** (se crean desde cero en v2).
 - Los **dumps legacy con datos reales NO se versionan**: colócalos en `sql/dumps/` (ignorado por git) solo en tu
   entorno local para la migración.
 - Los datos **Sifone** (asociados, datacrédito, movimientos tributarios, etc.) se cargan desde los archivos reales
   por **UI › Cargas**.
+
+```bash
+python sql/migrar_v1_a_v2.py --reset                     # todo
+python sql/migrar_v1_a_v2.py --only=creditos --reset     # solo la fábrica de créditos
+```
 
 ---
 

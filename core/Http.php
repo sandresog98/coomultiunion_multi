@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Csrf.php';
+require_once __DIR__ . '/Logger.php';
 
 /**
  * Utilidades HTTP para endpoints API (JSON). API-first (regla 7).
@@ -81,7 +82,13 @@ final class Http
         if ($m === 'GET' || $m === 'HEAD' || $m === 'OPTIONS') {
             return;
         }
+        // Bearer token: no hay sesión/cookie que proteger (CSRF no aplica).
+        if (class_exists('TokenAuth', false) && TokenAuth::active()) {
+            return;
+        }
         if (!Csrf::verify()) {
+            Logger::log('csrf_rechazado', 'seguridad', null,
+                'Token CSRF inválido · ' . $m . ' ' . ($_SERVER['REQUEST_URI'] ?? ''), null, null, 'warning');
             self::fail('Token CSRF inválido', 403);
         }
     }

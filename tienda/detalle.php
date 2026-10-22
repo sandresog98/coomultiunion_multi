@@ -14,11 +14,14 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tienda Multi — Coomultiunion</title>
 <link rel="icon" href="<?= $appBase ?>/assets/favicons/favicon_telmovil.ico" sizes="any">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Tema: fija data-bs-theme ANTES de pintar (evita parpadeo). Por defecto: claro. -->
+<script>(function(){try{var t=localStorage.getItem('multi-theme');document.documentElement.setAttribute('data-bs-theme',t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-bs-theme','light');}})();</script>
+<link href="<?= $appBase ?>/assets/vendor/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/vendor/fontawesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/css/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/front.css">
 <link rel="stylesheet" href="<?= $appBase ?>/tienda/assets/tienda.css">
+<link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
 <body>
 
@@ -35,6 +38,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
   </a>
   <div class="td-header-right">
     <span class="td-coop d-none d-md-inline-flex"><img src="<?= $COOP ?>" alt="Coomultiunion"></span>
+    <button type="button" class="td-icon-btn" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>
     <a class="td-btn td-btn-ghost" href="index"><i class="fas fa-arrow-left"></i> Volver al catálogo</a>
   </div>
 </header>
@@ -46,6 +50,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
 <div class="td-footer">
   <div class="td-coop"><img src="<?= $COOP ?>" alt="Coomultiunion"></div>
   <div style="margin-top:6px"><i class="fas fa-info-circle"></i> Catálogo informativo de la cooperativa.</div>
+  <div style="margin-top:6px"><a href="<?= $appBase ?>/privacidad" style="color:var(--tp-brand)">Política de tratamiento de datos</a></div>
 </div>
 
 </div><!-- .td-app -->
@@ -95,5 +100,6 @@ async function cargar(){
 }
 cargar();
 </script>
+<script src="<?= $appBase ?>/assets/js/theme.js"></script>
 </body>
 </html>

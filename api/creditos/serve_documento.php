@@ -9,6 +9,7 @@ Http::requireMethod('GET');
 $id = (int) ($_GET['id'] ?? 0); if ($id <= 0) Http::fail('Falta el id.');
 $d = $cred->getDocumento($id);
 if (!$d) Http::fail('Documento no encontrado.', 404);
+Logger::descarga(Auth::actor()['id'] ?? null, 'creditos.documentos', "Documento #$id");
 try {
     Storage::for('creditos')->serve('creditos/' . $d['ruta_archivo'], [
         'mime'        => $d['tipo_mime'] ?: 'application/octet-stream',

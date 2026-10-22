@@ -10,6 +10,7 @@ $items = [
     ['k' => 'mov',         'href' => 'movimientos',           'icon' => 'fa-list',               'label' => 'Movimientos'],
     ['k' => 'cred',        'href' => 'creditos',               'icon' => 'fa-file-invoice-dollar','label' => 'Mis créditos'],
     ['k' => 'solicitudes', 'href' => 'solicitudes',            'icon' => 'fa-list-check',         'label' => 'Solicitudes'],
+    ['k' => 'asistente',   'href' => 'asistente',               'icon' => 'fa-comments',           'label' => 'Soli IA'],
     ['k' => 'password',    'href' => 'mi-clave',               'icon' => 'fa-key',                'label' => 'Cambiar contraseña'],
 ];
 ?>

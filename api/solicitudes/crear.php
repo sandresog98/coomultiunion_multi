@@ -53,10 +53,11 @@ if ($actor['tipo'] === 'asociado') {
         'actor_id'         => (string) $actor['id'],
     ];
     if ($tipo === 'ticket') {
+        Http::crud('solicitudes.gestion', 'crear_ticket');
         // Ticket interno: solicitante es un usuario (id) y requiere responsable.
         $ctx['solicitante_tipo'] = 'interno';
         $ctx['creado_por']       = (int) $actor['id'];
-        $ctx['responsable_id']   = (int) (($in['responsable_id'] ?? $in['detalle']['responsable_id'] ?? 0) ?: 0) ?: null;
+        $ctx['responsable_id']   = (int) (($in['responsable_id'] ?? $detalle['responsable_id'] ?? 0) ?: 0) ?: null;
         if ($ctx['responsable_id'] === null) {
             Http::fail('El ticket requiere un responsable_id');
         }

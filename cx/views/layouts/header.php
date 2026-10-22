@@ -21,9 +21,9 @@ $__envLabel = env_label();
 <link rel="icon" href="<?= $APP ?>/assets/favicons/favicon.ico" sizes="any">
 <!-- Tema: fija data-bs-theme ANTES de pintar (evita parpadeo). Por defecto: claro. -->
 <script>(function(){try{var t=localStorage.getItem('multi-theme');document.documentElement.setAttribute('data-bs-theme',t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-bs-theme','light');}})();</script>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="<?= $APP ?>/assets/vendor/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="<?= $APP ?>/assets/vendor/fontawesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="<?= $APP ?>/assets/css/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="<?= $APP ?>/assets/css/front.css">
 <link rel="stylesheet" href="<?= $CX ?>/assets/cx.css">
 <link rel="stylesheet" href="<?= $APP ?>/assets/css/theme-dark.css">

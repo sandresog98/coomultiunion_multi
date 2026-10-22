@@ -16,6 +16,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
     <div class="mb-2"><label class="form-label small text-muted mb-0">Descripción</label><textarea class="portal-input form-control" id="pDesc" rows="4" placeholder="Cuéntenos con detalle"></textarea></div>
     <div class="mb-2"><label class="form-label small text-muted mb-0">Adjuntos</label><input type="file" class="form-control" id="pFile" multiple></div>
     <button class="btn btn-portal-gradient" onclick="enviar()"><i class="fa-solid fa-paper-plane me-1"></i>Enviar PQRS</button>
+    <div class="form-text small text-muted mt-2">Al enviar aceptas nuestra <a href="<?= $APP ?>/privacidad" target="_blank" rel="noopener">Política de Tratamiento de Datos Personales</a>.</div>
     <div id="msg" class="mt-2 small"></div>
   </div>
 </div>

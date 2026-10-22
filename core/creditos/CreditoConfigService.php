@@ -24,17 +24,30 @@ final class CreditoConfigService
         $w = $w ? 'WHERE ' . implode(' AND ', $w) : '';
         return $this->db->query("SELECT * FROM credito_lineas $w ORDER BY nombre_credito")->fetchAll();
     }
+    /** Líneas (tipopr) de Sifone que ningún credito_lineas.sifone_alias logra resolver. */
+    public function lineasSinMapear(): array
+    {
+        return $this->db->query(
+            "SELECT ec.tipopr AS tipo_prestamo, COUNT(*) AS creditos
+             FROM sifone_estado_cuenta ec
+             LEFT JOIN credito_lineas cl ON FIND_IN_SET(ec.tipopr, cl.sifone_alias) > 0
+             WHERE cl.id IS NULL
+             GROUP BY ec.tipopr
+             ORDER BY creditos DESC, ec.tipopr"
+        )->fetchAll();
+    }
     public function lineaCrear(array $d, ?array $actor = null): int
     {
         $nombre = trim((string) ($d['nombre_credito'] ?? ''));
         if ($nombre === '') throw new DomainException('El nombre de la línea es obligatorio.');
         $this->db->prepare(
-            "INSERT INTO credito_lineas (nombre_credito, limite_meses, tasa, seguro_vida, seguro_deudores, estado_activo, mostrar_en_fabrica, creado_por)
-             VALUES (?,?,?,?,?,?,?,?)"
+            "INSERT INTO credito_lineas (nombre_credito, limite_meses, tasa, seguro_vida, seguro_deudores, estado_activo, mostrar_en_fabrica, sifone_alias, creado_por)
+             VALUES (?,?,?,?,?,?,?,?,?)"
         )->execute([
             $nombre, (int) ($d['limite_meses'] ?? 0) ?: null,
             (float) ($d['tasa'] ?? 0), (float) ($d['seguro_vida'] ?? 0), (float) ($d['seguro_deudores'] ?? 0),
             (int) (($d['estado_activo'] ?? true) ? 1 : 0), (int) (($d['mostrar_en_fabrica'] ?? true) ? 1 : 0),
+            self::normalizarAlias((string) ($d['sifone_alias'] ?? '')),
             $actor['id'] ?? null,
         ]);
         $id = (int) $this->db->lastInsertId();
@@ -47,11 +60,19 @@ final class CreditoConfigService
         foreach (['nombre_credito' => 'nombre_credito', 'tasa' => 'tasa', 'seguro_vida' => 'seguro_vida', 'seguro_deudores' => 'seguro_deudores'] as $k => $c) {
             if (array_key_exists($k, $d)) { $sets[] = "$c=?"; $vals[] = trim((string) $d[$k]); }
         }
+        if (array_key_exists('sifone_alias', $d)) { $sets[] = 'sifone_alias=?'; $vals[] = self::normalizarAlias((string) $d['sifone_alias']); }
         foreach (['limite_meses', 'estado_activo', 'mostrar_en_fabrica'] as $k) {
             if (array_key_exists($k, $d)) { $sets[] = "$k=?"; $vals[] = (int) $d[$k]; }
         }
         if ($sets) { $vals[] = $id; $this->db->prepare("UPDATE credito_lineas SET " . implode(',', $sets) . ", fecha_actualizacion=NOW() WHERE id=?")->execute($vals); }
         Logger::log('editar', 'creditos.lineas', $actor['id'] ?? null, "Editada línea #$id");
+    }
+
+    /** Alias Sifone: lista separada por coma, sin vacíos ni espacios sobrantes (null si queda vacía). */
+    private static function normalizarAlias(string $s): ?string
+    {
+        $parts = array_filter(array_map('trim', explode(',', $s)), static fn($p) => $p !== '');
+        return $parts ? implode(',', $parts) : null;
     }
 
     // ── Secciones ────────────────────────────────────────────────────────

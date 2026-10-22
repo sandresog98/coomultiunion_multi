@@ -40,4 +40,10 @@ final class Logger
     {
         self::log('login', $modulo, $idUsuario, $detalle, null, null, $ok ? 'info' : 'warning');
     }
+
+    /** Descarga/servido de un archivo o exportación de un reporte. */
+    public static function descarga(string|int|null $idUsuario, string $modulo, string $detalle): void
+    {
+        self::log('descargar', $modulo, $idUsuario, $detalle);
+    }
 }

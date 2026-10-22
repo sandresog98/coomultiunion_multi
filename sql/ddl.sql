@@ -175,10 +175,12 @@ CREATE TABLE IF NOT EXISTS asociados_control (
   reset_token            VARCHAR(64) NULL,
   reset_token_expires_at DATETIME NULL,
   estado_activo          TINYINT(1) NOT NULL DEFAULT 1,
+  opt_in                 TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = autoriza comunicaciones (WhatsApp/SMS/email)',
   fecha_actualizacion    TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (cedula),
   INDEX idx_ac_reset (reset_token),
-  INDEX idx_ac_estado (estado_activo)
+  INDEX idx_ac_estado (estado_activo),
+  INDEX idx_ac_opt_in (opt_in)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Jobs de carga Sifone. Registra cada archivo procesado.
@@ -516,44 +518,85 @@ FROM sifone_asociados;
 -- Complementa con tasa y plazo de cartera_aseguradora,
 -- cuotas y codeudor de datacredito, y días mora de cartera_mora.
 -- Incluye campos calculados: cuotas_pagadas, cuotas_vencidas, monto_cobranza, pago_minimo.
+-- Cuotas: totales = plazo real (cartera_aseguradora), pendientes = ec.cuotap,
+--         pagadas = totales - pendientes. (Sifone no trae el total de cuotas aparte.)
+-- fecha_vencimiento: se toma de sifone_estado_cuenta (fuente nativa), no de datacredito.
+-- Join datacredito: por COUNT/CAST numérico porque Sifone trae cedula y numero_credito
+--         sin ceros a la izquierda (el resto del esquema los guarda a 10).
+-- saldo_total = saldo Sifone + monto_cobranza (siempre incluye la cobranza).
+-- seguros/interés: prorrateo diario del mes en curso sobre saldo_capital, según la
+--         línea (credito_lineas, resuelta por FIND_IN_SET contra su sifone_alias).
+--         Tasas en % mensual → /100.
+-- Catálogo de líneas de crédito (tasas/seguros/límites) configurable.
+-- Se define ANTES de vw_creditos porque la vista hace LEFT JOIN con esta tabla.
+CREATE TABLE IF NOT EXISTS credito_lineas (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_credito     VARCHAR(100) NOT NULL,
+  limite_meses       INT NULL,
+  tasa               DECIMAL(8,4) NOT NULL DEFAULT 0,
+  seguro_vida        DECIMAL(5,4) NOT NULL DEFAULT 0,
+  seguro_deudores    DECIMAL(5,4) NOT NULL DEFAULT 0,
+  estado_activo      TINYINT(1) NOT NULL DEFAULT 1,
+  mostrar_en_fabrica TINYINT(1) NOT NULL DEFAULT 1,
+  -- Nombres de línea tal como los trae Sifone (sifone_*.tipopr), separados por coma.
+  -- Permite resolver la línea de un crédito importado (vw_creditos). Editable en la UI.
+  sifone_alias       TEXT NULL,
+  creado_por         INT NULL,
+  -- FK: usuarios.id
+  fecha_creacion     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion TIMESTAMP NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 DROP VIEW IF EXISTS vw_creditos;
 CREATE VIEW vw_creditos AS
 SELECT base.*,
-       base.cuotas_totales - base.cuotas_pendientes AS cuotas_pagadas,
+       GREATEST(0, base.cuotas_totales - base.cuotas_pendientes) AS cuotas_pagadas,
        ROUND(base.saldo_mora / NULLIF(base.valor_cuota, 0), 1) AS cuotas_vencidas,
-       CASE WHEN base.dias_mora > 60 THEN base.valor_cuota * 0.08
-            WHEN base.dias_mora > 50 THEN base.valor_cuota * 0.06
-            WHEN base.dias_mora > 40 THEN base.valor_cuota * 0.05
-            WHEN base.dias_mora > 30 THEN base.valor_cuota * 0.04
-            WHEN base.dias_mora > 20 THEN base.valor_cuota * 0.03
-            WHEN base.dias_mora > 11 THEN base.valor_cuota * 0.02
-            ELSE 0 END AS monto_cobranza,
-       IF(base.saldo_mora > 0, base.saldo_mora, base.valor_cuota)
-         + CASE WHEN base.dias_mora > 60 THEN base.valor_cuota * 0.08
-                WHEN base.dias_mora > 50 THEN base.valor_cuota * 0.06
-                WHEN base.dias_mora > 40 THEN base.valor_cuota * 0.05
-                WHEN base.dias_mora > 30 THEN base.valor_cuota * 0.04
-                WHEN base.dias_mora > 20 THEN base.valor_cuota * 0.03
-                WHEN base.dias_mora > 11 THEN base.valor_cuota * 0.02
-                ELSE 0 END AS pago_minimo
+       base.saldo_sifone + base.monto_cobranza AS saldo_total
 FROM (
   SELECT ec.cedula,
          ec.numero  AS numero_credito,
          ec.tipopr  AS tipo_prestamo,
          ec.fechae  AS fecha_emision,
-         dc.fecha_vencimiento,
+         ec.fechav  AS fecha_vencimiento,
          COALESCE(cm.fechap, dc.fecha_pago) AS fecha_pago,
          dc.desembolso_inicial,
          COALESCE(dc.cuota, ca.valorc, ec.valorc) AS valor_cuota,
          ec.saldoc  AS saldo_capital,
          ec.saldom  AS saldo_mora,
          ec.saldoi  AS saldo_intereses,
-         ec.saldot  AS saldo_total,
-         CAST(ec.cuotap AS SIGNED) AS cuotas_totales,
-         COALESCE(dc.cuotas_pendientes, 0) AS cuotas_pendientes,
+         ec.saldot  AS saldo_sifone,
+         CASE WHEN ca.plazo > 0 THEN CAST(ca.plazo AS SIGNED)
+              ELSE CAST(ec.cuotap AS SIGNED) END AS cuotas_totales,
+         CAST(ec.cuotap AS SIGNED) AS cuotas_pendientes,
          COALESCE(cm.diav, 0)   AS dias_mora,
-         ca.tasa    AS tasa_interes,
+         ca.tasa    AS tasa_seguro,
+         cl.tasa    AS tasa_interes,
          ca.plazo,
+         CASE WHEN COALESCE(cm.diav, 0) > 60 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.08
+              WHEN COALESCE(cm.diav, 0) > 50 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.06
+              WHEN COALESCE(cm.diav, 0) > 40 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.05
+              WHEN COALESCE(cm.diav, 0) > 30 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.04
+              WHEN COALESCE(cm.diav, 0) > 20 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.03
+              WHEN COALESCE(cm.diav, 0) > 11 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.02
+              ELSE 0 END AS monto_cobranza,
+         IF(ec.saldom > 0, ec.saldom, COALESCE(dc.cuota, ca.valorc, ec.valorc))
+           + CASE WHEN COALESCE(cm.diav, 0) > 60 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.08
+                  WHEN COALESCE(cm.diav, 0) > 50 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.06
+                  WHEN COALESCE(cm.diav, 0) > 40 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.05
+                  WHEN COALESCE(cm.diav, 0) > 30 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.04
+                  WHEN COALESCE(cm.diav, 0) > 20 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.03
+                  WHEN COALESCE(cm.diav, 0) > 11 THEN COALESCE(dc.cuota, ca.valorc, ec.valorc) * 0.02
+                  ELSE 0 END AS pago_minimo,
+         CASE WHEN cl.id IS NULL THEN NULL
+              ELSE FLOOR(ec.saldoc * (cl.seguro_vida / 100) / 30
+                         * GREATEST(0, DATEDIFF(CURDATE(), COALESCE(cm.fechap, dc.fecha_pago, ec.fechae) - INTERVAL 1 MONTH))) END AS seguro_vida,
+         CASE WHEN cl.id IS NULL THEN NULL
+              ELSE FLOOR(ec.saldoc * (cl.seguro_deudores / 100) / 30
+                         * GREATEST(0, DATEDIFF(CURDATE(), COALESCE(cm.fechap, dc.fecha_pago, ec.fechae) - INTERVAL 1 MONTH))) END AS seguro_deudores,
+         CASE WHEN cl.id IS NULL THEN NULL
+              ELSE FLOOR(ec.saldoc * (cl.tasa / 100) / 30
+                         * GREATEST(0, DATEDIFF(CURDATE(), COALESCE(cm.fechap, dc.fecha_pago, ec.fechae) - INTERVAL 1 MONTH))) END AS interes,
          dc_co.nombre    AS codeudor_nombre,
          dc_co.celular   AS codeudor_celular,
          dc_co.email     AS codeudor_email,
@@ -562,11 +605,16 @@ FROM (
   LEFT JOIN sifone_cartera_aseguradora ca
     ON ca.numero = ec.numero AND ca.cedula = ec.cedula
   LEFT JOIN sifone_datacredito dc
-    ON dc.numero_credito = ec.numero AND dc.cedula = ec.cedula AND dc.codeudor = 0
+    ON CAST(dc.cedula AS UNSIGNED) = CAST(ec.cedula AS UNSIGNED)
+   AND CAST(dc.numero_credito AS UNSIGNED) = CAST(ec.numero AS UNSIGNED)
+   AND dc.codeudor = 0
   LEFT JOIN sifone_datacredito dc_co
-    ON dc_co.numero_credito = ec.numero AND dc_co.codeudor = 1
+    ON CAST(dc_co.numero_credito AS UNSIGNED) = CAST(ec.numero AS UNSIGNED)
+   AND dc_co.codeudor = 1
   LEFT JOIN sifone_cartera_mora cm
     ON cm.presta = ec.numero AND cm.cedula = ec.cedula
+  LEFT JOIN credito_lineas cl
+    ON FIND_IN_SET(ec.tipopr, cl.sifone_alias) > 0
 ) base;
 
 -- #####################################################################
@@ -745,20 +793,7 @@ CREATE TABLE IF NOT EXISTS cobranza_detalle_mora_credito (
 -- #####################################################################
 
 -- Catálogo de líneas de crédito (tasas/seguros/límites) configurable.
-CREATE TABLE IF NOT EXISTS credito_lineas (
-  id                 INT AUTO_INCREMENT PRIMARY KEY,
-  nombre_credito     VARCHAR(100) NOT NULL,
-  limite_meses       INT NULL,
-  tasa               DECIMAL(8,4) NOT NULL DEFAULT 0,
-  seguro_vida        DECIMAL(5,4) NOT NULL DEFAULT 0,
-  seguro_deudores    DECIMAL(5,4) NOT NULL DEFAULT 0,
-  estado_activo      TINYINT(1) NOT NULL DEFAULT 1,
-  mostrar_en_fabrica TINYINT(1) NOT NULL DEFAULT 1,
-  creado_por         INT NULL,
-  -- FK: usuarios.id
-  fecha_creacion     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  fecha_actualizacion TIMESTAMP NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- NOTA: se define ANTES de `vw_creditos` (la vista hace LEFT JOIN con esta tabla); ver más arriba.
 
 -- Cabecera de solicitud de crédito (Fábrica). Columna tipadas (núcleo).
 CREATE TABLE IF NOT EXISTS credito_solicitudes (
@@ -2061,4 +2096,461 @@ CREATE TABLE IF NOT EXISTS app_configuracion (
   fecha_actualizacion DATETIME     NULL,
   PRIMARY KEY (clave)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- #####################################################################
+-- ############ ASISTENTE IA — chat del portal (cx/) ##################
+-- Sin FK ni ENUM (regla §3). Prefijo de módulo: chat_*
+-- #####################################################################
+
+-- Conversaciones del asociado. Identidad = cédula (sesión del portal).
+-- FK: sifone_asociados.cedula  |  valores.estado: activa|archivada
+CREATE TABLE IF NOT EXISTS chat_sesiones (
+  id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  cedula              VARCHAR(20)  NOT NULL,
+  titulo              VARCHAR(255) NULL,
+  estado              VARCHAR(15)  NOT NULL DEFAULT 'activa',
+  fecha_creacion      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_chatses_cedula (cedula, fecha_actualizacion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Mensajes de cada conversación. FK: chat_sesiones.id
+-- valores.rol: user|assistant  |  valores.estado: ok|error|filtrado
+CREATE TABLE IF NOT EXISTS chat_mensajes (
+  id                BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  sesion_id         INT UNSIGNED  NOT NULL,
+  rol               VARCHAR(15)   NOT NULL,
+  contenido         MEDIUMTEXT    NOT NULL,
+  modelo            VARCHAR(80)   NULL,
+  tokens_prompt     INT           NULL,
+  tokens_completion INT           NULL,
+  tokens_cached     INT           NULL,                    -- tokens de entrada servidos desde caché
+  latencia_ms       INT           NULL,
+  costo_usd         DECIMAL(14,6) NULL,
+  estado            VARCHAR(15)   NULL,
+  fecha_creacion    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_chatmsg_sesion (sesion_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Base de conocimiento (RAG ligero por FULLTEXT). Alimenta el system prompt.
+-- valores.estado: 1 activo | 0 inactivo
+CREATE TABLE IF NOT EXISTS chat_conocimiento (
+  id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  categoria           VARCHAR(80)  NULL,
+  titulo              VARCHAR(255) NOT NULL,
+  palabras_clave      VARCHAR(255) NULL,
+  contenido           MEDIUMTEXT   NOT NULL,
+  fuente              VARCHAR(255) NULL,
+  estado              TINYINT      NOT NULL DEFAULT 1,
+  version             INT          NOT NULL DEFAULT 1,
+  fecha_actualizacion DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FULLTEXT KEY ft_chatcon (titulo, palabras_clave, contenido)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Cupo/consumo diario por asociado (control de costos y abuso).
+CREATE TABLE IF NOT EXISTS chat_uso (
+  id                BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  cedula            VARCHAR(20)   NOT NULL,
+  fecha             DATE          NOT NULL,
+  mensajes          INT           NOT NULL DEFAULT 0,
+  tokens_prompt     INT           NOT NULL DEFAULT 0,
+  tokens_completion INT           NOT NULL DEFAULT 0,
+  tokens_cached     INT           NOT NULL DEFAULT 0,
+  costo_usd         DECIMAL(14,6) NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_chatuso_cedula_fecha (cedula, fecha)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Precio por modelo en USD por 1.000.000 de tokens, versionado por fecha.
+-- Tarifas "off" (con descuento) aplican dentro de la ventana [off_desde_utc, off_hasta_utc).
+CREATE TABLE IF NOT EXISTS chat_precios_modelo (
+  id                    INT UNSIGNED  AUTO_INCREMENT PRIMARY KEY,
+  modelo                VARCHAR(80)   NOT NULL,
+  precio_input_usd      DECIMAL(12,6) NOT NULL,
+  precio_output_usd     DECIMAL(12,6) NOT NULL,
+  precio_cached_usd     DECIMAL(12,6) NOT NULL DEFAULT 0,
+  precio_input_off_usd  DECIMAL(12,6) NULL,
+  precio_output_off_usd DECIMAL(12,6) NULL,
+  precio_cached_off_usd DECIMAL(12,6) NULL,
+  off_desde_utc         TINYINT       NULL,
+  off_hasta_utc         TINYINT       NULL,
+  vigente_desde         DATETIME      NOT NULL,
+  nota                  VARCHAR(255)  NULL,
+  UNIQUE KEY uq_chatprecio_modelo_fecha (modelo, vigente_desde)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Valoración de respuestas (útil / no útil). FK: chat_mensajes.id
+-- valores.util: 1 útil | 0 no útil
+CREATE TABLE IF NOT EXISTS chat_feedback (
+  id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  mensaje_id     BIGINT UNSIGNED NOT NULL,
+  cedula         VARCHAR(20)     NOT NULL,
+  util           TINYINT         NOT NULL,
+  comentario     VARCHAR(500)    NULL,
+  fecha_creacion DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_chatfb_mensaje_cedula (mensaje_id, cedula)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Parámetros configurables del asistente.
+INSERT INTO app_configuracion (clave, valor, descripcion) VALUES
+  ('chat_ia_habilitado',      '1',                         'Asistente IA del portal: 1 activo | 0 deshabilitado'),
+  ('chat_ia_limite_diario',   '50',                        'Máximo de mensajes por asociado por día'),
+  ('chat_ia_max_tokens',      '800',                       'Tope de tokens de salida por respuesta'),
+  ('chat_ia_prompt_version',  '2026-10-16',                'Versión vigente del system prompt'),
+  ('chat_ia_contacto_soporte','atenciongalerias@coomultiunion.com', 'Correo de escalado a soporte humano'),
+  ('chat_ia_sesion_ttl',      '15',                        'Minutos de inactividad tras los que se cierra una conversación del asistente'),
+  ('chat_ia_nombre',          'Soli',                      'Nombre visible del asistente IA del portal')
+ON DUPLICATE KEY UPDATE clave = clave;
+
+-- >>> Precio real de deepseek-ai/DeepSeek-V4.1-Flash en SiliconFlow
+--     (USD por 1.000.000 de tokens). Estándar 00-14 UTC · descuento 14-24 UTC.
+INSERT INTO chat_precios_modelo
+  (modelo, precio_input_usd, precio_output_usd, precio_cached_usd,
+   precio_input_off_usd, precio_output_off_usd, precio_cached_off_usd,
+   off_desde_utc, off_hasta_utc, vigente_desde, nota)
+VALUES
+  ('deepseek-ai/DeepSeek-V4.1-Flash', 0.300000, 1.200000, 0.006000,
+   0.150000, 0.600000, 0.003000, 14, 24, '2026-01-01 00:00:00',
+   'SiliconFlow: estándar 00-14 UTC · descuento 14-24 UTC')
+ON DUPLICATE KEY UPDATE
+  precio_input_usd = VALUES(precio_input_usd),
+  precio_output_usd = VALUES(precio_output_usd),
+  precio_cached_usd = VALUES(precio_cached_usd),
+  precio_input_off_usd = VALUES(precio_input_off_usd),
+  precio_output_off_usd = VALUES(precio_output_off_usd),
+  precio_cached_off_usd = VALUES(precio_cached_off_usd),
+  off_desde_utc = VALUES(off_desde_utc),
+  off_hasta_utc = VALUES(off_hasta_utc);
+
+-- #####################################################################
+-- ############ API POR TOKENS (integraciones externas / curl) #########
+-- #####################################################################
+-- Ver sql/migrations/007_api_tokens.sql. Sin FK/ENUM (§3).
+-- api_tokens: tokens emitidos; el secreto se guarda SOLO como SHA-256.
+-- api_endpoints_autorizados: allowlist global (módulos o acciones) invocables
+--   por token; la gestiona ui/modules/api/pages/authorized_endpoints.php.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  nombre       VARCHAR(120) NOT NULL,          -- etiqueta legible
+  prefijo      VARCHAR(12)  NOT NULL,          -- primeros chars del secreto (UI/logs)
+  token_hash   VARCHAR(128) NOT NULL,          -- SHA-256 del secreto (nunca en claro)
+  actor_id     INT          NOT NULL,          -- FK implícita: usuarios.id (staff)
+  scopes       TEXT         NULL,              -- JSON array de claves autorizadas del token
+  activo       TINYINT(1)   NOT NULL DEFAULT 1,
+  expires_at   DATETIME     NOT NULL,          -- obligatoria (por defecto +180 días)
+  last_used_at DATETIME     NULL,
+  created_by   INT          NULL,              -- FK implícita: usuarios.id
+  created_at   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  revoked_at   DATETIME     NULL,
+  UNIQUE KEY uq_api_token_hash (token_hash),
+  INDEX idx_api_token_prefijo (prefijo),
+  INDEX idx_api_token_actor (actor_id),
+  INDEX idx_api_token_expira (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS api_endpoints_autorizados (
+  clave               VARCHAR(120) NOT NULL,   -- 'solicitudes.gestion.crear_ticket' o 'solicitudes'
+  descripcion         VARCHAR(255) NULL,
+  activo              TINYINT(1)   NOT NULL DEFAULT 1,
+  fecha_actualizacion DATETIME     NULL,
+  PRIMARY KEY (clave)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Semilla de endpoints autorizados (ver sql/migrations/008_api_endpoints_seed.sql).
+-- Solo estas claves pueden invocarse por token; el resto responde 403.
+INSERT INTO api_endpoints_autorizados (clave, descripcion, activo, fecha_actualizacion) VALUES
+  ('oficina.asociados',                  'Asociados: consulta (listar/ficha) y gate de productos', 1, NOW()),
+  ('oficina.movimientos_tipos',          'Movimientos: catálogo de tipos',                        1, NOW()),
+  ('solicitudes',                        'Solicitudes: listar / detalle / config (lectura)',       1, NOW()),
+  ('solicitudes.gestion.crear_ticket',   'Solicitudes: crear ticket interno',                       1, NOW()),
+  ('asociados.detalle.asignar',          'Asociados: asignar producto/cláusula',                   1, NOW()),
+  ('asociados.detalle.editar',           'Asociados: editar asignación',                           1, NOW()),
+  ('asociados.detalle.eliminar',         'Asociados: eliminar asignación',                         1, NOW()),
+  ('asociados.detalle.adjuntar',         'Asociados: adjuntar a asignación',                       1, NOW()),
+  ('cobranza.lista.comunicar',           'Cobranza: comunicaciones (crear/editar/eliminar)',       1, NOW()),
+  ('cobranza.lista.indagar',             'Cobranza: indagaciones (crear/editar/eliminar)',         1, NOW()),
+  ('cobranza.lista.adjuntar',            'Cobranza: adjunto de indagación',                        1, NOW()),
+  ('pagos.conciliar',                    'Pagos PSE: asignar/desasignar Confiar',                  1, NOW()),
+  ('pagos.confirmar',                    'Pagos Confiar: asignar / no válido / desasignar',        1, NOW()),
+  ('pagos.upload',                       'Pagos Confiar: subir comprobante',                       1, NOW()),
+  ('movimientos.crear',                  'Movimientos: crear',                                     1, NOW()),
+  ('movimientos.editar',                 'Movimientos: editar',                                    1, NOW()),
+  ('cargas.procesar',                    'Cargas: procesar archivo Sifone',                        1, NOW()),
+  ('creditos.nueva_solicitud.crear',     'Créditos: crear solicitud',                              1, NOW()),
+  ('creditos.gestionar_solicitud.etapas','Créditos: cambiar de etapa',                             1, NOW()),
+  ('creditos.gestionar_solicitud.campos','Créditos: diligenciar campos',                           1, NOW()),
+  ('tienda.catalogo.crear',              'Tienda catálogo: crear',                                 1, NOW()),
+  ('tienda.catalogo.editar',             'Tienda catálogo: editar',                                1, NOW()),
+  ('tienda.catalogo.toggle',             'Tienda catálogo: activar/inactivar',                     1, NOW()),
+  ('tienda.catalogo.eliminar',           'Tienda catálogo: eliminar',                              1, NOW()),
+  ('tienda.clientes.crear',              'Tienda clientes: crear',                                 1, NOW()),
+  ('tienda.clientes.editar',             'Tienda clientes: editar',                                1, NOW()),
+  ('tienda.clientes.toggle',             'Tienda clientes: activar/inactivar',                     1, NOW()),
+  ('tienda.clientes.eliminar',           'Tienda clientes: eliminar',                              1, NOW()),
+  ('convenios.index.crear',              'Convenios: crear convenio/producto',                     1, NOW()),
+  ('convenios.index.editar',             'Convenios: editar convenio/producto',                    1, NOW()),
+  ('convenios.index.toggle',             'Convenios: activar/inactivar',                           1, NOW()),
+  ('convenios.index.eliminar',           'Convenios: eliminar',                                    1, NOW()),
+  ('convenios.stock.crear',              'Boletas: crear',                                         1, NOW()),
+  ('convenios.stock.anular',             'Boletas: anular',                                        1, NOW()),
+  ('convenios.stock.vender',             'Boletas: vender',                                        1, NOW()),
+  ('convenios.stock.contabilizar',       'Boletas: contabilizar',                                  1, NOW()),
+  ('portal.actuar',                       'Portal: actuar en nombre de una cédula (X-Acting-As-Cedula)', 1, NOW())
+ON DUPLICATE KEY UPDATE clave = clave;
+
+-- Límite de solicitudes por token (ventana fija). Ver sql/migrations/009_api_token_rate.sql.
+CREATE TABLE IF NOT EXISTS api_token_rate (
+  token_id INT         NOT NULL,   -- FK implícita: api_tokens.id
+  ventana  VARCHAR(20) NOT NULL,   -- número de ventana (epoch / ventana_seg)
+  usos     INT         NOT NULL DEFAULT 0,
+  PRIMARY KEY (token_id, ventana)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- #####################################################################
+-- ############ COMUNICACIONES — WhatsApp / SMS / Email ################
+-- Sin FK ni ENUM (regla §3). Prefijo de módulo: com_*
+-- Espejo de sql/migrations/015_comunicaciones_twilio.sql
+-- #####################################################################
+
+-- Remitentes habilitados (números Twilio, WhatsApp o correos SendGrid/SMTP).
+-- valores.canal: sms | whatsapp | email
+-- valores.proveedor: twilio | sendgrid | smtp
+CREATE TABLE IF NOT EXISTS com_remitentes (
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  canal                 VARCHAR(12)  NOT NULL,
+  proveedor             VARCHAR(15)  NOT NULL DEFAULT 'twilio',
+  etiqueta              VARCHAR(100) NOT NULL,
+  direccion             VARCHAR(160) NOT NULL,
+  nombre_remitente      VARCHAR(150) NULL,
+  messaging_service_sid VARCHAR(40)  NULL,
+  soporta_media         TINYINT(1)   NOT NULL DEFAULT 0,
+  limite_mps            INT          NOT NULL DEFAULT 1,
+  activo                TINYINT(1)   NOT NULL DEFAULT 1,
+  predeterminado        TINYINT(1)   NOT NULL DEFAULT 0,
+  creado_por            INT          NULL,
+  fecha_creacion        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion   DATETIME     NULL,
+  UNIQUE KEY uq_com_rem_canal_dir (canal, direccion),
+  INDEX idx_com_rem_canal (canal, activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Contactos por canal con consentimiento (opt-in) y baja (opt-out).
+CREATE TABLE IF NOT EXISTS com_contactos (
+  id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+  canal              VARCHAR(12)  NOT NULL,
+  direccion          VARCHAR(160) NOT NULL,
+  nombre             VARCHAR(150) NULL,
+  asociado_cedula    VARCHAR(20)  NULL,
+  opt_in             TINYINT(1)   NOT NULL DEFAULT 0,
+  opt_in_fuente      VARCHAR(30)  NULL,
+  opt_in_fecha       DATETIME     NULL,
+  opt_out            TINYINT(1)   NOT NULL DEFAULT 0,
+  opt_out_fuente     VARCHAR(30)  NULL,
+  opt_out_fecha      DATETIME     NULL,
+  opt_out_motivo     VARCHAR(160) NULL,
+  activo             TINYINT(1)   NOT NULL DEFAULT 1,
+  metadata_json      LONGTEXT     NULL,
+  fecha_creacion     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion DATETIME    NULL,
+  UNIQUE KEY uq_com_contacto_canal_dir (canal, direccion),
+  INDEX idx_com_contacto_cedula (asociado_cedula),
+  INDEX idx_com_contacto_opt (canal, opt_in, opt_out)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Plantillas: Twilio Content (WhatsApp) y plantillas locales/SendGrid.
+CREATE TABLE IF NOT EXISTS com_plantillas (
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  proveedor             VARCHAR(20)  NOT NULL DEFAULT 'twilio_content',
+  proveedor_template_id VARCHAR(80)  NULL,
+  nombre                VARCHAR(150) NOT NULL,
+  canal                 VARCHAR(12)  NOT NULL DEFAULT 'whatsapp',
+  categoria             VARCHAR(25)  NULL,
+  idioma                VARCHAR(8)   NOT NULL DEFAULT 'es',
+  asunto                VARCHAR(255) NULL,
+  cuerpo                TEXT         NULL,
+  cuerpo_html           MEDIUMTEXT   NULL,
+  variables_json        TEXT         NULL,
+  media_json            TEXT         NULL,
+  tipos_json            LONGTEXT     NULL,
+  estado_aprobacion     VARCHAR(20)  NULL,
+  motivo_rechazo        VARCHAR(255) NULL,
+  activo                TINYINT(1)   NOT NULL DEFAULT 1,
+  fecha_sincronizacion  DATETIME     NULL,
+  creado_por            INT          NULL,
+  fecha_creacion        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion   DATETIME     NULL,
+  UNIQUE KEY uq_com_plantilla_proveedor (proveedor, proveedor_template_id),
+  INDEX idx_com_plantilla_canal (canal, estado_aprobacion, activo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Adjuntos del módulo.
+CREATE TABLE IF NOT EXISTS com_adjuntos (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  nombre_original  VARCHAR(255) NOT NULL,
+  clave            VARCHAR(255) NOT NULL,
+  mime             VARCHAR(120) NOT NULL,
+  tamano           BIGINT       NOT NULL DEFAULT 0,
+  canal            VARCHAR(12)  NULL,
+  creado_por       INT          NULL,
+  fecha_creacion   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_com_adjunto_clave (clave),
+  INDEX idx_com_adjunto_canal (canal)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Planes/campañas.
+CREATE TABLE IF NOT EXISTS com_planes (
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  nombre                VARCHAR(160) NOT NULL,
+  descripcion           TEXT         NULL,
+  tipo                  VARCHAR(15)  NOT NULL DEFAULT 'masiva',
+  canal                 VARCHAR(12)  NOT NULL,
+  proveedor             VARCHAR(15)  NOT NULL DEFAULT 'twilio',
+  remitente_id          INT          NULL,
+  plantilla_id          INT          NULL,
+  proveedor_template_id VARCHAR(80)  NULL,
+  modo_contenido        VARCHAR(12)  NOT NULL DEFAULT 'texto',
+  asunto                VARCHAR(255) NULL,
+  cuerpo                MEDIUMTEXT   NULL,
+  cuerpo_html           MEDIUMTEXT   NULL,
+  media_json            TEXT         NULL,
+  variables_json        TEXT         NULL,
+  origen                VARCHAR(15)  NOT NULL DEFAULT 'manual',
+  filtros_json          TEXT         NULL,
+  programado_para       DATETIME     NULL,
+  zona_horaria          VARCHAR(40)  NOT NULL DEFAULT 'America/Bogota',
+  estado                VARCHAR(15)  NOT NULL DEFAULT 'borrador',
+  total_destinatarios   INT          NOT NULL DEFAULT 0,
+  total_omitidos        INT          NOT NULL DEFAULT 0,
+  total_enviados        INT          NOT NULL DEFAULT 0,
+  total_entregados      INT          NOT NULL DEFAULT 0,
+  total_leidos          INT          NOT NULL DEFAULT 0,
+  total_fallidos        INT          NOT NULL DEFAULT 0,
+  costo_estimado_usd    DECIMAL(14,6) NOT NULL DEFAULT 0,
+  costo_total_usd       DECIMAL(14,6) NOT NULL DEFAULT 0,
+  ia_costo_usd          DECIMAL(14,6) NOT NULL DEFAULT 0,
+  ia_modelo             VARCHAR(80)  NULL,
+  ia_tokens_prompt      INT          NULL,
+  ia_tokens_completion  INT          NULL,
+  ia_generaciones       INT          NOT NULL DEFAULT 0,
+  moneda                VARCHAR(3)   NOT NULL DEFAULT 'USD',
+  creado_por            INT          NULL,
+  programado_por        INT          NULL,
+  fecha_ejecucion       DATETIME     NULL,
+  fecha_fin             DATETIME     NULL,
+  fecha_cancelacion     DATETIME     NULL,
+  cancelado_por         INT          NULL,
+  error_resumen         TEXT         NULL,
+  fecha_creacion        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion   DATETIME     NULL,
+  INDEX idx_com_plan_estado (estado, programado_para),
+  INDEX idx_com_plan_creado (creado_por),
+  INDEX idx_com_plan_canal (canal, estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Destinatarios por plan.
+CREATE TABLE IF NOT EXISTS com_destinatarios (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  plan_id             INT          NOT NULL,
+  contacto_id         BIGINT       NULL,
+  asociado_cedula     VARCHAR(20)  NULL,
+  nombre              VARCHAR(150) NULL,
+  destino             VARCHAR(160) NOT NULL,
+  canal               VARCHAR(12)  NOT NULL,
+  variables_json      TEXT         NULL,
+  estado              VARCHAR(15)  NOT NULL DEFAULT 'pendiente',
+  motivo_omitido      VARCHAR(160) NULL,
+  proveedor_message_id VARCHAR(80) NULL,
+  estado_proveedor    VARCHAR(25)  NULL,
+  error_code          INT          NULL,
+  error_message       VARCHAR(255) NULL,
+  num_segmentos       INT          NULL,
+  precio_usd          DECIMAL(14,6) NULL,
+  precio_moneda       VARCHAR(3)   NULL,
+  intentos            INT          NOT NULL DEFAULT 0,
+  ultimo_intento      DATETIME     NULL,
+  fecha_envio         DATETIME     NULL,
+  fecha_entrega       DATETIME     NULL,
+  fecha_lectura       DATETIME     NULL,
+  fecha_creacion      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  fecha_actualizacion DATETIME     NULL,
+  UNIQUE KEY uq_com_dest_plan_destino (plan_id, destino),
+  INDEX idx_com_dest_plan_estado (plan_id, estado),
+  INDEX idx_com_dest_sid (proveedor_message_id),
+  INDEX idx_com_dest_contacto (contacto_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Eventos crudos de estado.
+CREATE TABLE IF NOT EXISTS com_eventos (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  plan_id             INT          NULL,
+  destinatario_id     BIGINT       NULL,
+  proveedor           VARCHAR(15)  NULL,
+  proveedor_message_id VARCHAR(80) NULL,
+  tipo                VARCHAR(15)  NOT NULL,
+  estado              VARCHAR(25)  NULL,
+  error_code          INT          NULL,
+  error_message       VARCHAR(255) NULL,
+  payload_json        LONGTEXT     NULL,
+  fecha_evento        DATETIME     NULL,
+  fecha_creacion      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_com_evento_plan (plan_id),
+  INDEX idx_com_evento_dest (destinatario_id),
+  INDEX idx_com_evento_sid (proveedor_message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Mensajes entrantes.
+CREATE TABLE IF NOT EXISTS com_entrantes (
+  id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  proveedor           VARCHAR(15)  NOT NULL DEFAULT 'twilio',
+  proveedor_message_id VARCHAR(80) NOT NULL,
+  canal               VARCHAR(12)  NOT NULL,
+  de                  VARCHAR(160) NOT NULL,
+  para                VARCHAR(160) NULL,
+  asunto              VARCHAR(255) NULL,
+  cuerpo              MEDIUMTEXT   NULL,
+  media_json          TEXT         NULL,
+  asociado_cedula     VARCHAR(20)  NULL,
+  contacto_id         BIGINT       NULL,
+  plan_id             INT          NULL,
+  destinatario_id     BIGINT       NULL,
+  leido               TINYINT(1)   NOT NULL DEFAULT 0,
+  atendido_por        INT          NULL,
+  fecha_proveedor     DATETIME     NULL,
+  fecha_creacion      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_com_entrante_sid (proveedor, proveedor_message_id),
+  INDEX idx_com_entrante_de (de),
+  INDEX idx_com_entrante_fecha (fecha_creacion),
+  INDEX idx_com_entrante_plan (plan_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Resumen diario de Usage Records de Twilio.
+CREATE TABLE IF NOT EXISTS com_uso_twilio (
+  id                   INT AUTO_INCREMENT PRIMARY KEY,
+  proveedor            VARCHAR(15)  NOT NULL DEFAULT 'twilio',
+  fecha                DATE         NOT NULL,
+  categoria            VARCHAR(40)  NOT NULL,
+  cantidad             INT          NOT NULL DEFAULT 0,
+  precio_usd           DECIMAL(14,6) NOT NULL DEFAULT 0,
+  moneda               VARCHAR(3)   NOT NULL DEFAULT 'USD',
+  payload_json         LONGTEXT     NULL,
+  fecha_sincronizacion DATETIME     NULL,
+  UNIQUE KEY uq_com_uso (proveedor, fecha, categoria)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Parámetros del módulo (los secretos viven en .env).
+INSERT INTO app_configuracion (clave, valor, descripcion) VALUES
+  ('com_hora_inicio',                '08:00',                  'Hora local mínima para envíos masivos'),
+  ('com_hora_fin',                   '20:00',                  'Hora local máxima para envíos masivos'),
+  ('com_zona_horaria',               'America/Bogota',         'Zona horaria de la interfaz'),
+  ('com_limite_mps',                 '5',                      'Mensajes por segundo por ejecución'),
+  ('com_lote',                       '50',                     'Tamaño de lote del worker'),
+  ('com_reintentos',                 '2',                      'Reintentos ante errores transitorios'),
+  ('com_consentimiento_obligatorio', '1',                      '1 = bloquear envíos sin opt-in'),
+  ('com_tarifa_sms_usd',             '0',                      'Tarifa estimada SMS por segmento (USD)'),
+  ('com_tarifa_whatsapp_usd',        '0',                      'Tarifa estimada WhatsApp por mensaje (USD)'),
+  ('com_tarifa_email_usd',           '0',                      'Tarifa estimada email por mensaje (USD)'),
+  ('com_max_destinatarios',          '50000',                  'Máximo de destinatarios por plan'),
+  ('com_optout_keywords',            'STOP,BAJA,CANCELAR,SALIR,UNSUBSCRIBE,NO MAS', 'Palabras que activan opt-out'),
+  ('com_optin_keywords',             'ALTA,SI,START,UNSTOP',    'Palabras que reactivan el consentimiento'),
+  ('com_ayuda_texto',                'Para dejar de recibir mensajes responde BAJA. Para ayuda responde AYUDA.', 'Texto de ayuda para inbound')
+ON DUPLICATE KEY UPDATE clave = clave;
 

@@ -42,6 +42,14 @@ $menu = [
     ['tipo'=>'grupo', 'label'=>'Cobranza', 'icon'=>'fa-phone', 'perm'=>'cobranza', 'hijos'=>[
         ['tipo'=>'link', 'label'=>'Cobranza unificada', 'icon'=>'fa-chart-pie', 'key'=>'cobranza', 'href'=>'modules/cobranza/pages/cobranza', 'perm'=>'cobranza', 'built'=>true, 'b'=>'B6', 'p'=>28],
     ]],
+    ['tipo'=>'grupo', 'label'=>'Comunicaciones', 'icon'=>'fa-comment-dots', 'perm'=>'comunicaciones', 'hijos'=>[
+        ['tipo'=>'link', 'label'=>'Panel', 'icon'=>'fa-chart-line', 'key'=>'comunicaciones_panel', 'href'=>'modules/comunicaciones/pages/panel', 'perm'=>'comunicaciones', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ['tipo'=>'link', 'label'=>'Nueva comunicación', 'icon'=>'fa-paper-plane', 'key'=>'comunicaciones_nueva', 'href'=>'modules/comunicaciones/pages/nueva', 'perm'=>'comunicaciones', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ['tipo'=>'link', 'label'=>'Planes', 'icon'=>'fa-calendar-check', 'key'=>'comunicaciones_planes', 'href'=>'modules/comunicaciones/pages/planes', 'perm'=>'comunicaciones', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ['tipo'=>'link', 'label'=>'Historial', 'icon'=>'fa-clock-rotate-left', 'key'=>'comunicaciones_historial', 'href'=>'modules/comunicaciones/pages/historial', 'perm'=>'comunicaciones', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ['tipo'=>'link', 'label'=>'Plantillas', 'icon'=>'fa-file-lines', 'key'=>'comunicaciones_plantillas', 'href'=>'modules/comunicaciones/pages/plantillas', 'perm'=>'comunicaciones', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ['tipo'=>'link', 'label'=>'Configuración', 'icon'=>'fa-gears', 'key'=>'comunicaciones_configuracion', 'href'=>'modules/comunicaciones/pages/configuracion', 'perm'=>'comunicaciones_config', 'built'=>true, 'b'=>'—', 'p'=>0],
+    ]],
     ['tipo'=>'grupo', 'label'=>'Solicitudes', 'icon'=>'fa-file-lines', 'perm'=>'solicitudes', 'hijos'=>[
         ['tipo'=>'link', 'label'=>'Tickets', 'icon'=>'fa-list-check', 'key'=>'solicitudes_gestion', 'href'=>'modules/solicitudes/pages/gestion', 'perm'=>'solicitudes.gestion', 'built'=>true, 'b'=>'B7', 'p'=>29],
     ]],
@@ -77,6 +85,8 @@ $menu = [
     ['tipo'=>'grupo', 'label'=>'Sistema', 'icon'=>'fa-server', 'perm'=>null, 'hijos'=>[
         ['tipo'=>'link', 'label'=>'Usuarios', 'key'=>'usuarios', 'href'=>'modules/usuarios/pages/usuarios', 'perm'=>'usuarios.gestion', 'icon'=>'fa-user-cog', 'built'=>true, 'b'=>'B1', 'p'=>19],
         ['tipo'=>'link', 'label'=>'Logs',      'key'=>'logs',     'href'=>'modules/logs/pages/logs',         'perm'=>'logs.gestion',     'icon'=>'fa-clipboard-list', 'built'=>true, 'b'=>'B12', 'p'=>20],
+        ['tipo'=>'link', 'label'=>'Asistente IA', 'key'=>'chat_metricas', 'href'=>'modules/chat/pages/metricas', 'perm'=>'chat.metricas', 'icon'=>'fa-robot', 'built'=>true, 'b'=>'B12', 'p'=>21],
+        ['tipo'=>'link', 'label'=>'API / Endpoints', 'key'=>'api_authorized_endpoints', 'href'=>'modules/api/pages/authorized_endpoints', 'perm'=>'api', 'icon'=>'fa-plug', 'built'=>true, 'b'=>'B12', 'p'=>22],
     ]],
 ];
 

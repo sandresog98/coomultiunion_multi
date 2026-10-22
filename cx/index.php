@@ -7,6 +7,7 @@ $pageTitle = 'Inicio';
 $activeNav = 'inicio';
 require __DIR__ . '/views/layouts/header.php';
 $nombre = htmlspecialchars($actor['nombre'] ?? '');
+$soliImg = is_file(dirname(__DIR__) . '/assets/img/ia.png') ? $APP . '/assets/img/ia.png' : '';
 ?>
 <div class="portal-card portal-card-glowing-border mb-3">
   <div class="card-header-brand">
@@ -16,6 +17,18 @@ $nombre = htmlspecialchars($actor['nombre'] ?? '');
     </div>
   </div>
 </div>
+<a class="portal-card portal-card-glowing-border mb-3 soli-cta" href="<?= cx_url('asistente') ?>">
+  <div class="card-header-brand">
+    <span class="soli-cta-avatar">
+      <?php if ($soliImg): ?><img src="<?= htmlspecialchars($soliImg) ?>" alt=""><?php else: ?><i class="fa-solid fa-robot"></i><?php endif; ?>
+    </span>
+    <div>
+      <div class="fs-5 fw-bold">Habla con Soli</div>
+      <div class="small text-muted">Nuestro asistente de inteligencia artificial</div>
+    </div>
+    <i class="fa-solid fa-comments soli-cta-arrow" aria-hidden="true"></i>
+  </div>
+</a>
 <div class="row g-3">
   <div class="col-12 col-sm-6 col-md-3">
     <a class="portal-card portal-card-glowing-border text-decoration-none text-dark portal-mini d-block h-100" href="<?= cx_url('aportes') ?>">

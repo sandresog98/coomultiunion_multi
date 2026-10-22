@@ -38,6 +38,8 @@ switch ($action) {
         if (count($rep['data']) === 0) {
             Http::fail('No hay datos para exportar en el rango seleccionado.', 400);
         }
+        Logger::descarga(Auth::actor()['id'] ?? null, 'tienda.reportes',
+            sprintf('Reporte %s %s-%s (%d filas)', $tipo, $desde ?: '*', $hasta ?: '*', max(0, count($rep['data']) - 1)));
         require_once dirname(__DIR__, 2) . '/utils/ExcelGenerator.php';
         ExcelGenerator::generateExcel($rep['data'], $rep['filename'], $rep['sheet'], $rep['widths']);
 }

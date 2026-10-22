@@ -11,6 +11,7 @@ $in      = Http::input();
 $valores = is_array($in['valores'] ?? null) ? $in['valores'] : $in;
 
 $permitidas = ['boleta_credito_meses_min', 'boleta_credito_aportes_min', 'boleta_credito_limite'];
+$cambios = [];
 foreach ($permitidas as $k) {
     if (!array_key_exists($k, $valores)) {
         continue;
@@ -20,6 +21,12 @@ foreach ($permitidas as $k) {
         Http::fail("Valor inválido para {$k}.");
     }
     $service->set($k, (string) ((int) $v));
+    $cambios[] = $k . '=' . (int) $v;
+}
+
+if ($cambios) {
+    Logger::log('editar', 'configuracion', Auth::actor()['id'] ?? null,
+        'Parámetros actualizados: ' . implode(', ', $cambios));
 }
 
 Http::ok(['config' => $service->all()]);

@@ -210,6 +210,13 @@
 [data-bs-theme="dark"] .btn-portal-outline { border-color: #8fc5ee; color: #8fc5ee; }
 [data-bs-theme="dark"] .btn-portal-outline:hover { background: #8fc5ee; color: #0a101a; }
 
+/* ---------- 6b) Chat del asistente (cx) ---------- */
+[data-bs-theme="dark"] .chat-sesion.active { background: rgba(24, 130, 205, .18); }
+[data-bs-theme="dark"] .chat-msg.error .chat-bubble { background: rgba(235, 48, 49, .16); border-color: rgba(235, 48, 49, .4); color: #ff8a8b; }
+[data-bs-theme="dark"] .chat-chip { color: #cfe3f5; }
+[data-bs-theme="dark"] .chat-fb-btn:hover { color: #cfe3f5; }
+[data-bs-theme="dark"] .chat-bubble a { color: #6fb3e8; }
+
 
 /* ============================================================
    7) Control del tema (visible en ambos temas)
@@ -261,3 +268,138 @@
   background: rgba(255, 255, 255, .12);
   color: #cfe3f5;
 }
+
+/* ============================================================
+   8) Superficies públicas — tienda (.td-*), convenios (.cv-*) y
+      simulador (.sim-*).
+      Sus CSS definen tokens como alias de --front-* (ya adaptados en
+      la sección 1) y usan clases Bootstrap; aquí solo neutralizamos
+      los colores claros hardcodeados.
+   ============================================================ */
+
+/* ----- 8.1 Textos en azul de marca → azul claro ----- */
+[data-bs-theme="dark"] .td-price,
+[data-bs-theme="dark"] .td-page-title,
+[data-bs-theme="dark"] .td-qv-price,
+[data-bs-theme="dark"] .td-det-coop-main,
+[data-bs-theme="dark"] .td-sidebar h3,
+[data-bs-theme="dark"] .td-modal h3,
+[data-bs-theme="dark"] .td-drawer h3,
+[data-bs-theme="dark"] .td-sort-opt.is-selected,
+[data-bs-theme="dark"] .td-opt-list li button.is-selected,
+[data-bs-theme="dark"] .td-chip,
+[data-bs-theme="dark"] .td-chip button,
+[data-bs-theme="dark"] .cv-price,
+[data-bs-theme="dark"] .cv-page-title,
+[data-bs-theme="dark"] .cv-qv-price,
+[data-bs-theme="dark"] .cv-det-coop-main,
+[data-bs-theme="dark"] .cv-hero-body h2,
+[data-bs-theme="dark"] .cv-sidebar h3,
+[data-bs-theme="dark"] .cv-modal h3,
+[data-bs-theme="dark"] .cv-drawer h3,
+[data-bs-theme="dark"] .cv-sort-opt.is-selected,
+[data-bs-theme="dark"] .cv-opt-list li button.is-selected,
+[data-bs-theme="dark"] .cv-chip,
+[data-bs-theme="dark"] .cv-chip button {
+  color: #8fc5ee;
+}
+
+/* ----- 8.2 Superficies blancas → oscuras (tienda) ----- */
+[data-bs-theme="dark"] .td-filter-trigger,
+[data-bs-theme="dark"] .td-sort-btn,
+[data-bs-theme="dark"] .td-sort-menu,
+[data-bs-theme="dark"] .td-opt-list li button,
+[data-bs-theme="dark"] .td-modal,
+[data-bs-theme="dark"] .td-drawer,
+[data-bs-theme="dark"] .td-page,
+[data-bs-theme="dark"] .td-qchip,
+[data-bs-theme="dark"] .td-qv-img {
+  background: #16212e;
+  border-color: var(--front-line);
+  color: var(--front-ink);
+}
+[data-bs-theme="dark"] .td-search input { background: #16212e; color: var(--front-ink); }
+[data-bs-theme="dark"] .td-search input::placeholder { color: var(--front-muted); }
+[data-bs-theme="dark"] .td-modal-close,
+[data-bs-theme="dark"] .td-drawer-close { background: #1b2735; color: var(--front-ink); }
+[data-bs-theme="dark"] .td-sort-opt:hover { background: #1b2735; }
+[data-bs-theme="dark"] .td-sort-opt.is-selected,
+[data-bs-theme="dark"] .td-opt-list li button.is-selected,
+[data-bs-theme="dark"] .td-chip,
+[data-bs-theme="dark"] .td-tag-multi { background: #2b3a4d; }
+[data-bs-theme="dark"] .td-card-img { background: linear-gradient(135deg, #101a27, #16212e); }
+[data-bs-theme="dark"] .td-card-img .td-noimg { color: #40536b; }
+[data-bs-theme="dark"] .td-card-actions { border-top-color: var(--front-line); }
+[data-bs-theme="dark"] .td-det-coop { color: var(--front-ink); }
+[data-bs-theme="dark"] .td-qchip { box-shadow: none; }
+/* Estados activos (mantener el azul de marca, que las reglas de arriba igualaban) */
+[data-bs-theme="dark"] .td-page.is-active,
+[data-bs-theme="dark"] .cv-page.is-active {
+  background: var(--brand-blue-dark);
+  color: #fff;
+  border-color: var(--brand-blue-dark);
+}
+[data-bs-theme="dark"] .td-qchip.is-active,
+[data-bs-theme="dark"] .cv-qchip.is-active {
+  background: var(--brand-blue-dark);
+  color: #fff;
+  border-color: hsla(203, 100%, 80%, .2);
+}
+
+/* Botones de la tienda con estilo inline (fondo #fff / texto azul oscuro). */
+[data-bs-theme="dark"] .td-btn-detail,
+[data-bs-theme="dark"] .td-btn-ghost[style*="background:#fff"] {
+  color: #8fc5ee !important;
+  background: #16212e !important;
+  border-color: var(--front-line) !important;
+}
+
+/* ----- 8.3 Superficies blancas → oscuras (convenios) ----- */
+[data-bs-theme="dark"] .cv-filter-trigger,
+[data-bs-theme="dark"] .cv-sort-btn,
+[data-bs-theme="dark"] .cv-sort-menu,
+[data-bs-theme="dark"] .cv-opt-list li button,
+[data-bs-theme="dark"] .cv-modal,
+[data-bs-theme="dark"] .cv-drawer,
+[data-bs-theme="dark"] .cv-page,
+[data-bs-theme="dark"] .cv-qchip,
+[data-bs-theme="dark"] .cv-qv-img {
+  background: #16212e;
+  border-color: var(--front-line);
+  color: var(--front-ink);
+}
+[data-bs-theme="dark"] .cv-search input { background: #16212e; color: var(--front-ink); }
+[data-bs-theme="dark"] .cv-search input::placeholder { color: var(--front-muted); }
+[data-bs-theme="dark"] .cv-modal-close,
+[data-bs-theme="dark"] .cv-drawer-close { background: #1b2735; color: var(--front-ink); }
+[data-bs-theme="dark"] .cv-sort-opt:hover { background: #1b2735; }
+[data-bs-theme="dark"] .cv-sort-opt.is-selected,
+[data-bs-theme="dark"] .cv-opt-list li button.is-selected,
+[data-bs-theme="dark"] .cv-chip,
+[data-bs-theme="dark"] .cv-tag-multi { background: #2b3a4d; }
+[data-bs-theme="dark"] .cv-card-img { background: linear-gradient(135deg, #101a27, #16212e); }
+[data-bs-theme="dark"] .cv-card-img .cv-noimg { color: #40536b; }
+[data-bs-theme="dark"] .cv-card-actions { border-top-color: var(--front-line); }
+[data-bs-theme="dark"] .cv-det-coop { color: var(--front-ink); }
+[data-bs-theme="dark"] .cv-qchip { box-shadow: none; }
+[data-bs-theme="dark"] .cv-chip-contact { background: #1b2735; color: #9fc2e0; }
+[data-bs-theme="dark"] .cv-card-link .cv-card-actions { color: #6fb3e8; border-top-color: var(--front-line); }
+[data-bs-theme="dark"] .cv-hero-img .cv-noimg { background: linear-gradient(135deg, #101a27, #16212e); color: #40536b; }
+
+/* ----- 8.4 Puntos del fondo animado ----- */
+[data-bs-theme="dark"] .td-falling-overlay,
+[data-bs-theme="dark"] .cv-falling-overlay {
+  background-image: radial-gradient(circle at 50% 50%, transparent 0, transparent 2px, rgba(255, 255, 255, .08) 2px);
+}
+
+/* ----- 8.5 Simulador ----- */
+[data-bs-theme="dark"] .form-label { color: #a9b8c9; }
+[data-bs-theme="dark"] .table-amort tr.row-last { background: #14351f; color: #d7f5e0; }
+.sim-header .theme-toggle {
+  margin-left: auto;
+  width: 42px; height: 42px; flex: 0 0 auto;
+  border: 0; border-radius: 12px; cursor: pointer;
+  background: rgba(255, 255, 255, .16); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem;
+}
+.sim-header .theme-toggle:hover { background: rgba(255, 255, 255, .26); }

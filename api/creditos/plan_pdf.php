@@ -8,4 +8,5 @@ $opts = [];
 foreach (['fecha_inicio', 'primer_pago', 'aportes', 'bolsillo', 'fondo_solidario'] as $k) {
     if (isset($_GET[$k])) $opts[$k] = $_GET[$k];
 }
+Logger::descarga(Auth::actor()['id'] ?? null, 'creditos.plan', "Plan de pagos solicitud #$id");
 $cred->planPdf($id, $opts);

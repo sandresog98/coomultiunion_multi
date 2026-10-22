@@ -321,6 +321,9 @@ loadConfig().then(()=>cargarDet(false));
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-list-check me-2"></i>Tickets</span>
     <span class="d-flex align-items-center gap-2">
+      <?php if ($acc['solicitudes.gestion.crear_ticket'] ?? false): ?>
+      <button class="btn btn-light btn-sm" onclick="abrirNuevoTicket()"><i class="fas fa-plus me-1"></i>Nuevo ticket</button>
+      <?php endif; ?>
       <span class="small text-white-50" id="infoTotal"></span>
       <span id="fSizeBox"></span>
     </span>
@@ -360,11 +363,35 @@ loadConfig().then(()=>cargarDet(false));
     <nav id="paginacion" class="d-flex justify-content-center mt-3"></nav>
   </div>
 </div>
+<?php if ($acc['solicitudes.gestion.crear_ticket'] ?? false): ?>
+<div class="modal fade" id="nuevoTicketModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="fas fa-plus me-1"></i>Nuevo ticket interno</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-6"><label class="form-label">Solicitante <span class="text-danger">*</span></label><select class="form-select" id="ntSolicitante"></select></div>
+          <div class="col-md-6"><label class="form-label">Responsable <span class="text-danger">*</span></label><select class="form-select" id="ntResponsable"></select></div>
+          <div class="col-md-6"><label class="form-label">Categoría <span class="text-danger">*</span></label><select class="form-select" id="ntCategoria"></select></div>
+          <div class="col-md-6"><label class="form-label">Fecha de vencimiento</label><input type="date" class="form-control" id="ntVenc"></div>
+          <div class="col-12"><label class="form-label">Resumen <span class="text-danger">*</span></label><input class="form-control" id="ntResumen" maxlength="200" placeholder="Asunto breve"></div>
+          <div class="col-12"><label class="form-label">Descripción</label><textarea class="form-control" id="ntDesc" rows="3" placeholder="Detalle del ticket"></textarea></div>
+          <div class="col-12"><label class="form-label">Adjuntos</label><input type="file" class="form-control" id="ntFiles" multiple></div>
+        </div>
+        <div class="text-danger small mt-2" id="ntMsg"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-brand" onclick="crearTicket()"><i class="fas fa-save me-1"></i>Crear ticket</button></div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 <div id="toasts" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1080"></div>
 
 <script>
 window.API=<?php echo json_encode(apiUrl()); ?>;
 const STAFF_ID=<?php echo (int) ($staff['id'] ?? 0); ?>;
+const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
+const SEC_CREAR_TICKET=ACC['solicitudes.gestion.crear_ticket']===true;
 const L=window.Listado,esc=L.esc,fmtDt=L.fmtDt,api=L.api,deb=L.debounce;
 const TIPO_INI=<?php echo json_encode($filtroTipo); ?>;
 let state={q:'',tipo:TIPO_INI,estado:'',fase:'',resp:'',page:0,size:20,order:'fecha_creacion',dir:'DESC'};
@@ -468,6 +495,56 @@ async function cargar(){
 }
 function renderPagination(t){document.getElementById('paginacion').innerHTML=L.paginacion(t,state.page,state.size);}
 function goPage(p){state.page=p;cargar();window.scrollTo(0,0);}
+let ntModal=null;
+function abrirNuevoTicket(){
+  if(!SEC_CREAR_TICKET)return;
+  const u=CFG.responsables||[],cats=CFG.categorias||[];
+  const opUsu=u.map(x=>'<option value="'+x.id+'">'+esc(x.nombre_completo)+'</option>').join('');
+  document.getElementById('ntSolicitante').innerHTML=opUsu;
+  document.getElementById('ntResponsable').innerHTML='<option value="">— Seleccione —</option>'+opUsu;
+  document.getElementById('ntCategoria').innerHTML='<option value="">— Seleccione —</option>'+cats.map(c=>'<option value="'+c.id+'">'+esc(c.nombre)+'</option>').join('');
+  if(STAFF_ID)document.getElementById('ntSolicitante').value=String(STAFF_ID);
+  document.getElementById('ntResponsable').value='';
+  document.getElementById('ntCategoria').value='';
+  document.getElementById('ntResumen').value='';
+  document.getElementById('ntDesc').value='';
+  document.getElementById('ntVenc').value='';
+  document.getElementById('ntFiles').value='';
+  document.getElementById('ntMsg').textContent='';
+  if(!ntModal)ntModal=new bootstrap.Modal(document.getElementById('nuevoTicketModal'));
+  ntModal.show();
+}
+async function crearTicket(){
+  const sol=document.getElementById('ntSolicitante').value;
+  const resp=document.getElementById('ntResponsable').value;
+  const cat=document.getElementById('ntCategoria').value;
+  const res=document.getElementById('ntResumen').value.trim();
+  const desc=document.getElementById('ntDesc').value.trim();
+  const venc=document.getElementById('ntVenc').value;
+  const msg=document.getElementById('ntMsg');
+  if(!sol){msg.textContent='Seleccione el solicitante.';return;}
+  if(!resp){msg.textContent='Seleccione el responsable.';return;}
+  if(!cat){msg.textContent='Seleccione la categoría.';return;}
+  if(!res){msg.textContent='Ingrese el resumen.';return;}
+  const detalle={categoria_id:Number(cat),resumen:res,descripcion:desc};
+  if(venc)detalle.fecha_vencimiento=venc;
+  const files=document.getElementById('ntFiles').files||[];
+  msg.textContent='Creando…';
+  try{
+    const fd=new FormData();
+    fd.append('tipo','ticket');
+    fd.append('cedula_solicitante',String(sol));
+    fd.append('responsable_id',String(resp));
+    fd.append('detalle',JSON.stringify(detalle));
+    for(let i=0;i<files.length;i++)fd.append('files[]',files[i]);
+    const r=await fetch(API+'solicitudes/crear.php',{method:'POST',body:fd});
+    const j=await r.json();
+    if(!j.ok){msg.textContent=j.error||'Error';return;}
+    const id=j.data&&j.data.solicitud?j.data.solicitud.id:null;
+    ntModal.hide();
+    if(id)irDet(id);
+  }catch(e){msg.textContent='Error de conexión.';}
+}
 L.mountSize('fSizeBox', state, cargar);
 loadCfg().then(()=>cargar());
 </script>

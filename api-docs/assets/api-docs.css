@@ -1,0 +1,301 @@
+/* ============================================================
+   api-docs.css — Documentación pública de la API (Swagger UI) y
+   Roles y permisos.
+   Usa assets/css/front.css (tema base) y adapta a tema oscuro con
+   assets/css/theme-dark.css ([data-bs-theme="dark"]).
+   ============================================================ */
+
+.ad-body { background: var(--front-bg); }
+
+.ad-app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------- Cabecera ---------- */
+.ad-header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 20px;
+  background: var(--front-card);
+  border-bottom: 1px solid var(--front-line);
+  box-shadow: var(--front-shadow);
+  position: sticky; top: 0; z-index: 10;
+}
+.ad-brand { display: inline-flex; align-items: center; gap: 10px; }
+.ad-brand img { height: 46px; max-width: 180px; object-fit: contain; display: block; }
+.ad-brand .ad-logo-multi { height: 42px; width: auto; }
+.ad-titles { flex: 1 1 240px; min-width: 0; }
+.ad-title { font-size: 1.15rem; font-weight: 800; margin: 0; color: var(--brand-blue-dark); }
+.ad-sub { margin: 0; font-size: .82rem; color: var(--front-muted); }
+.ad-cta { white-space: nowrap; }
+
+/* ---------- Navegación ---------- */
+.ad-nav { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ad-navlink {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 13px; border-radius: 9px; text-decoration: none;
+  color: var(--brand-blue-dark); font-weight: 600; font-size: .85rem;
+  border: 1px solid transparent; transition: background .15s ease, color .15s ease;
+  background: transparent;
+}
+.ad-navlink:hover { background: #eaf3fb; color: var(--brand-blue-dark); }
+.ad-navlink.is-active { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); color: #fff; }
+
+/* Botón de tema (reutiliza el sistema de ui/: data-theme-toggle + theme.js) */
+.ad-theme-toggle { font: inherit; cursor: pointer; }
+.ad-theme-toggle.is-active,
+.ad-theme-toggle:hover { background: #eaf3fb; }
+
+/* ---------- Tabla de roles ---------- */
+.ad-card { border: 1px solid var(--front-line); border-radius: var(--front-radius); box-shadow: var(--front-shadow); background: var(--front-card); }
+.ad-table thead th {
+  background: #f7fafd; color: var(--brand-blue-dark); font-size: .82rem;
+  text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid var(--front-line);
+}
+.ad-role { font-weight: 700; color: var(--brand-blue-dark); }
+.ad-chip {
+  display: inline-block; background: #eef4fb; border: 1px solid #d7e5f3; color: #11468A;
+  border-radius: 8px; padding: 1px 8px; margin: 2px 3px 2px 0;
+  font-size: .76rem; font-family: ui-monospace, Consolas, monospace; white-space: nowrap;
+}
+.ad-chip-todo { background: #e6f4ea; border-color: #bfe3cb; color: #1e7a3d; font-weight: 700; font-family: inherit; }
+
+/* Chips agrupados por prefijo (expandibles) */
+.ad-group { display: inline; }
+.ad-group-items { display: inline; }
+.ad-group-items[hidden] { display: none; }
+.ad-chip-group {
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.ad-chip-group .ad-group-count {
+  background: rgba(17, 70, 138, .12); border-radius: 999px;
+  padding: 0 6px; font-size: .68rem; font-weight: 700;
+}
+.ad-chip-group .ad-group-caret { font-size: .62rem; opacity: .75; transition: transform .15s ease; }
+.ad-chip-group[aria-expanded="true"] .ad-group-caret { transform: rotate(180deg); }
+
+/* Alineación de la tabla de roles: contenido siempre arriba aunque la celda sea alta */
+.ad-table td, .ad-table th { vertical-align: top; }
+
+/* ---------- Contenido ---------- */
+.ad-main { flex: 1; width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+.ad-note {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: #eaf3fb; border: 1px solid #cfe3f5; color: var(--front-ink);
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 18px; font-size: .9rem;
+}
+.ad-note i { color: var(--brand-blue); margin-top: 3px; }
+.ad-note a { color: var(--brand-blue-dark); font-weight: 600; }
+
+.ad-swagger {
+  background: var(--front-card); border: 1px solid var(--front-line);
+  border-radius: var(--front-radius); box-shadow: var(--front-shadow);
+  overflow: hidden;
+}
+.ad-loading { text-align: center; color: var(--front-muted); padding: 48px 0; }
+
+/* ---------- Ajustes de Swagger UI ---------- */
+.ad-swagger .swagger-ui { font-family: var(--front-font); }
+/* Quitamos la topbar duplicada: ya tenemos cabecera propia. */
+.ad-swagger .swagger-ui .topbar { display: none; }
+.ad-swagger .swagger-ui .info { margin: 18px 0; }
+.ad-swagger .swagger-ui .info .title { font-family: var(--front-font); }
+.ad-swagger .swagger-ui .scheme-container {
+  background: #f7fafd; box-shadow: none; border-bottom: 1px solid var(--front-line);
+}
+.ad-swagger .swagger-ui .opblock-tag { font-family: var(--front-font); font-size: 1.05rem; }
+.ad-swagger .swagger-ui .info pre,
+.ad-swagger .swagger-ui .info code { font-size: .85rem; }
+
+/* Tabla de "Restricciones" que inyecta el plugin (x-* visibles) — Markdown */
+.ad-swagger .swagger-ui .renderedMarkdown table {
+  margin: 10px 0; font-size: .82rem; border-collapse: collapse;
+}
+.ad-swagger .swagger-ui .renderedMarkdown table td,
+.ad-swagger .swagger-ui .renderedMarkdown table th {
+  padding: 5px 10px; border: 1px solid var(--front-line); vertical-align: top;
+}
+.ad-swagger .swagger-ui .renderedMarkdown table tr td:first-child {
+  width: 34%; color: var(--front-muted); font-weight: 600;
+}
+.ad-swagger .swagger-ui .renderedMarkdown table code {
+  background: #eef4fb; border: 1px solid #d7e5f3; color: #11468A;
+  border-radius: 6px; padding: 0 5px; font-size: .78rem;
+}
+
+/* ---------- Pie ---------- */
+.ad-footer {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding: 14px 20px; border-top: 1px solid var(--front-line);
+  color: var(--front-muted); font-size: .8rem; background: var(--front-card);
+}
+.ad-footer a { color: var(--brand-blue-dark); text-decoration: none; }
+.ad-footer a:hover { text-decoration: underline; }
+
+/* ============================================================
+   TEMA OSCURO — shell (cabecera/nav/tablas/notas)
+   ============================================================ */
+[data-bs-theme="dark"] .ad-header { box-shadow: var(--front-shadow); }
+[data-bs-theme="dark"] .ad-title { color: #8fc5ee; }
+[data-bs-theme="dark"] .ad-navlink { color: #8fc5ee; }
+[data-bs-theme="dark"] .ad-navlink:hover { background: #1b2735; color: #a5d0f2; }
+[data-bs-theme="dark"] .ad-theme-toggle.is-active,
+[data-bs-theme="dark"] .ad-theme-toggle:hover { background: #1b2735; }
+[data-bs-theme="dark"] .ad-navlink.is-active { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-dark)); color: #fff; }
+
+[data-bs-theme="dark"] .ad-table thead th { background: #1b2735; color: #8fc5ee; border-bottom-color: var(--front-line); }
+[data-bs-theme="dark"] .ad-table tbody td { border-color: var(--front-line); }
+[data-bs-theme="dark"] .ad-role { color: #8fc5ee; }
+[data-bs-theme="dark"] .ad-chip { background: #1b2735; border-color: #2f4058; color: #9ecbf0; }
+[data-bs-theme="dark"] .ad-chip-todo { background: rgba(46, 158, 91, .18); border-color: rgba(46, 158, 91, .5); color: #7fd6a0; }
+[data-bs-theme="dark"] .ad-chip-group .ad-group-count { background: rgba(24, 130, 205, .28); }
+
+[data-bs-theme="dark"] .ad-note { background: rgba(24, 130, 205, .14); border-color: #24405c; }
+[data-bs-theme="dark"] .ad-note i { color: #6fb3e8; }
+[data-bs-theme="dark"] .ad-note a { color: #8fc5ee; }
+[data-bs-theme="dark"] .ad-note code { background: #1b2735; border: 1px solid #2f4058; color: #9ecbf0; border-radius: 6px; padding: 0 5px; }
+
+[data-bs-theme="dark"] .ad-footer a { color: #8fc5ee; }
+
+/* ============================================================
+   TEMA OSCURO — Swagger UI
+   Swagger UI no trae tema oscuro; reajustamos sus superficies.
+   ============================================================ */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info .title,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info li,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info p,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info a,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-tag,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock .opblock-summary-description,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-description-wrapper p,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .parameter__name,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .parameter__type,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .parameter__in,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .response-col_status,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .response-col_description,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .response-col_links,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown p,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown li,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui label,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .tab li button {
+  color: #d7e1ec;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info .title small { background: #2b3a4d; color: #d7e1ec; }
+
+/* Encabezados y celdas del Markdown (info + descripciones) */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h1,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h2,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h3,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h4,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h5,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown h6 {
+  color: #d7e1ec;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table td,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table th { color: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table tr td:first-child,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table tr th:first-child { color: var(--front-muted); }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info .base-url { color: #93a4b8; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui a { color: #6fb3e8; }
+
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .scheme-container {
+  background: #16212e; box-shadow: none; border-bottom: 1px solid #26344a;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-tag { border-bottom-color: #26344a; }
+
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock { border-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock .opblock-summary { border-bottom-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock .opblock-summary-path,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock .opblock-summary-path__deprecated { color: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock .opblock-summary-operation-id { color: #93a4b8; }
+
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-body,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-section-header {
+  background: #16212e; box-shadow: none;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-section-header { border-bottom: 1px solid #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-section-header h4 { color: #93a4b8; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-body .opblock-description-wrapper,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock-body pre.microlight { background: #101a26; color: #d7e1ec; }
+
+/* Métodos: aclaramos el tinte del fondo en oscuro */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock.opblock-get { background: rgba(97, 175, 254, .10); border-color: #2f5f8f; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock.opblock-post { background: rgba(73, 204, 144, .10); border-color: #2f7a5c; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock.opblock-put { background: rgba(252, 161, 48, .10); border-color: #8a6420; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .opblock.opblock-delete { background: rgba(249, 62, 62, .10); border-color: #8a3a3a; }
+
+/* Tablas (parámetros, respuestas, headers) */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui table thead tr td,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui table thead tr th {
+  border-bottom: 1px solid #26344a; color: #93a4b8;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui table tbody tr td { border-bottom-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .parameters-col_description p,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .parameters-col_description input { color: #d7e1ec; }
+
+/* Inputs / selects / textareas */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui input[type=text],
+[data-bs-theme="dark"] .ad-swagger .swagger-ui input[type=email],
+[data-bs-theme="dark"] .ad-swagger .swagger-ui input[type=password],
+[data-bs-theme="dark"] .ad-swagger .swagger-ui input[type=search],
+[data-bs-theme="dark"] .ad-swagger .swagger-ui input[type=file],
+[data-bs-theme="dark"] .ad-swagger .swagger-ui textarea,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui select {
+  background: #0e1621; border: 1px solid #2f4058; color: #d7e1ec;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn {
+  background: #1b2735; border-color: #2f4058; color: #d7e1ec;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn:hover { background: #223246; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn.authorize { color: #7fd6a0; border-color: #2f7a5c; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn.authorize svg { fill: #7fd6a0; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .btn.execute { background: #1882CD; color: #fff; border-color: #1882CD; }
+
+/* Modelos / schemas */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .model-box,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .model,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui section.models {
+  background: #16212e; border-color: #26344a;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .model-title,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .model .property,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .prop-type { color: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .models h4,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui section.models h4 { color: #93a4b8; border-bottom-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui section.models .model-container { background: #1b2735; }
+
+/* Código / ejemplos */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown code,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown code,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .info code {
+  background: #101a26; color: #9ecbf0;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .highlight-code,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .microlight,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .model-example { background: #101a26; color: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .copy-to-clipboard { background: #1b2735; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .download-contents { background: #1b2735; color: #d7e1ec; }
+
+/* Modal de autorización */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux {
+  background: #16212e; border-color: #26344a;
+}
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux-header,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux-content { border-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux-header h3,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux-content p { color: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialog-ux .modal-ux-header .close-modal svg { fill: #d7e1ec; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .dialogs .backdrop { background: rgba(0, 0, 0, .6); }
+
+/* Tabla de restricciones (plugin x-*) en oscuro */
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table td,
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table th { border-color: #26344a; }
+[data-bs-theme="dark"] .ad-swagger .swagger-ui .renderedMarkdown table code { background: #1b2735; border-color: #2f4058; color: #9ecbf0; }
+
+@media (max-width: 640px) {
+  .ad-title { font-size: 1rem; }
+  .ad-sub { display: none; }
+  .ad-main { padding: 14px; }
+  .ad-theme-toggle span { display: none; }
+}

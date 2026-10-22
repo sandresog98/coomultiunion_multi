@@ -14,11 +14,14 @@ $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Convenios — Coomultiunion</title>
 <link rel="icon" href="<?= $appBase ?>/assets/favicons/favicon.ico" sizes="any">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Tema: fija data-bs-theme ANTES de pintar (evita parpadeo). Por defecto: claro. -->
+<script>(function(){try{var t=localStorage.getItem('multi-theme');document.documentElement.setAttribute('data-bs-theme',t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-bs-theme','light');}})();</script>
+<link href="<?= $appBase ?>/assets/vendor/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/vendor/fontawesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="<?= $appBase ?>/assets/css/fonts.css" rel="stylesheet">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/front.css">
 <link rel="stylesheet" href="<?= $appBase ?>/convenios/assets/convenios.css">
+<link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
 <body>
 
@@ -35,6 +38,7 @@ $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
     </div>
   </div>
   <div class="cv-header-right">
+    <button type="button" class="cv-icon-btn" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>
     <a class="cv-btn cv-btn-wa" href="https://wa.me/573505780222?text=Hola%2C%20quiero%20consultar%20los%20convenios" target="_blank" rel="noopener">
       <i class="fab fa-whatsapp"></i><span class="d-none d-sm-inline">Contactar</span>
     </a>
@@ -58,6 +62,7 @@ $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
 
 <div class="cv-footer">
   <div style="margin-top:6px"><i class="fas fa-info-circle"></i> En convenios seleccionados un asociado podrá adquirir beneficios y boletas con precios especiales.</div>
+  <div style="margin-top:6px"><a href="<?= $appBase ?>/privacidad" style="color:var(--cv-brand)">Política de tratamiento de datos</a></div>
 </div>
 </div><!-- .cv-app -->
 
@@ -177,5 +182,6 @@ function go(p){ if(p<1||p>totalPages)return; pagina=p; window.scrollTo({top:0,be
 renderSort(); cargar();
 window.addEventListener('resize',function(){ const nuevo=detectarPer(); if(nuevo!==PER){ PER=nuevo; pagina=1; cargar(); } });
 </script>
+<script src="<?= $appBase ?>/assets/js/theme.js"></script>
 </body>
 </html>

@@ -18,6 +18,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
       <div class="col-md-12"><label class="form-label small text-muted mb-0">Observaciones</label><textarea class="portal-input form-control" id="fO" rows="2"></textarea></div>
     </div>
     <button class="btn btn-portal-gradient" onclick="enviar()"><i class="fa-solid fa-paper-plane me-1"></i>Enviar solicitud</button>
+    <div class="form-text small text-muted mt-2">Al enviar aceptas nuestra <a href="<?= $APP ?>/privacidad" target="_blank" rel="noopener">Política de Tratamiento de Datos Personales</a>.</div>
     <div id="msg" class="mt-2 small"></div>
   </div>
 </div>

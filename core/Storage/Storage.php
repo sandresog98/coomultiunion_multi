@@ -52,6 +52,7 @@ final class Storage
         'solicitudes' => 'r2',
         'cobranza' => 'r2',
         'fondo' => 'r2',
+        'comunicaciones' => 'local',
     ];
 
     /** @var array<string, StorageDriver> */

@@ -6,10 +6,13 @@ $rol = $staff['rol'] ?? '';
 $sec = ui_secciones('asociados.detalle', $rol);
 $puedeSaldos    = $sec['asociados.detalle.saldos']    ?? false;
 $puedeCreditos  = $sec['asociados.detalle.creditos']  ?? false;
+$puedeDetalleCr = $sec['asociados.detalle.creditos_detalle'] ?? false;
 $puedeProductos = $sec['asociados.detalle.productos'] ?? false;
 $puedeCobranza  = $sec['asociados.detalle.cobranza']  ?? false;
+$puedeComunicaciones = $sec['asociados.detalle.comunicaciones'] ?? false;
 $acc = ui_acciones('asociados.detalle', $rol);
 $canToggle  = ui_accion('asociados.detalle', 'toggle',   $rol);
+$canOptIn   = ui_accion('asociados.detalle', 'opt_in',   $rol);
 $canAsignar = ui_accion('asociados.detalle', 'asignar',  $rol);
 $canEditP   = ui_accion('asociados.detalle', 'editar',   $rol);
 $canElimP   = ui_accion('asociados.detalle', 'eliminar', $rol);
@@ -33,6 +36,7 @@ $m  = $data['productos'] ?? [];
 $cr = $data['creditos'] ?? [];
 $est = $data['estado'] ?? [];
 $activo = ($est['estado_activo'] ?? 1) == 1;
+$optInCom = (int) ($est['opt_in'] ?? 0) === 1;
 
 $pageTitle = 'Detalle de Asociado';
 $currentPage = 'asociados';
@@ -96,6 +100,16 @@ function row(string $label, string $value, string $valueClass = ''): string {
           <div class="col-md-6">
             <div class="mb-1"><strong>Estado:</strong> <?php echo $activo ? '<span class="badge text-bg-success">Activo</span>' : '<span class="badge text-bg-danger">Inactivo</span>'; ?></div>
             <div class="mb-1"><strong>Portal:</strong> <?php echo ($est['tiene_portal'] ?? 0) ? '<span class="badge text-bg-success">Activo</span>' : '<span class="badge text-bg-secondary">Sin portal</span>'; ?></div>
+            <?php if ($puedeComunicaciones): ?>
+            <div class="mb-1"><strong>Comunicaciones:</strong>
+              <?php echo $optInCom ? '<span class="badge text-bg-success">Opt-in activo</span>' : '<span class="badge text-bg-warning">Sin opt-in</span>'; ?>
+              <?php if ($canOptIn): ?>
+              <button class="btn btn-sm btn-outline-<?php echo $optInCom ? 'danger' : 'success'; ?> ms-1 py-0 px-2" onclick="toggleOptIn(<?php echo $optInCom ? 0 : 1; ?>)">
+                <i class="fas <?php echo $optInCom ? 'fa-toggle-off' : 'fa-toggle-on'; ?> me-1"></i><?php echo $optInCom ? 'Desactivar' : 'Activar'; ?>
+              </button>
+              <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <div class="mb-1"><strong>Fondo Bienestar:</strong> <?php
               if (($m['fondo_bienestar_tiene_producto'] ?? 0) == 1) {
                 echo ($m['fondo_bienestar_al_dia'] ?? 0) == 1
@@ -153,13 +167,18 @@ function row(string $label, string $value, string $valueClass = ''): string {
 <div class="row g-3 mt-1">
   <div class="col-12">
     <div class="card">
-      <div class="card-header brand"><strong><i class="fas fa-file-invoice me-2"></i>Créditos (<?php echo count($cr); ?>)</strong></div>
+      <div class="card-header brand d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-file-invoice me-2"></i>Créditos (<?php echo count($cr); ?>)</strong>
+        <?php if ($puedeDetalleCr): ?>
+        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#detalleCreditosModal"><i class="fas fa-eye me-1"></i>Ver detalle</button>
+        <?php endif; ?>
+      </div>
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm small align-middle mb-0">
             <thead class="table-light"><tr>
               <th>N°</th><th>Tipo</th><th class="text-center">Inicio</th><th class="text-center">Venc.</th>
-              <th class="text-center">Plazo</th><th class="text-center">F. pago</th>
+              <th class="text-center">F. pago</th>
               <th class="text-end">V. Inicial</th><th class="text-center">Cuotas</th><th class="text-end">Cuota</th>
               <th class="text-end">Capital</th><th class="text-end">Mora</th><th class="text-end">Intereses</th>
               <th class="text-center">Días</th><th class="text-center">Vencidas</th>
@@ -182,7 +201,6 @@ function row(string $label, string $value, string $valueClass = ''): string {
                 <td><?php echo esc($c['tipo_prestamo']); ?></td>
                 <td class="text-center"><?php echo fmtFecha($c['fecha_emision']); ?></td>
                 <td class="text-center"><?php echo fmtFecha($c['fecha_vencimiento']); ?></td>
-                <td class="text-center"><?php echo esc($c['plazo']); ?>m</td>
                 <td class="text-center"><?php echo fmtFecha($c['fecha_pago']); ?></td>
                 <td class="text-end"><?php echo money($c['desembolso_inicial']); ?></td>
                 <td class="text-center"><?php echo $cuotas; ?></td>
@@ -195,7 +213,7 @@ function row(string $label, string $value, string $valueClass = ''): string {
                 <td class="text-end"><?php echo money($c['monto_cobranza']); ?></td>
                 <td class="text-end"><b><?php echo money($c['pago_minimo']); ?></b></td>
                 <td class="text-end"><?php echo money($c['saldo_total']); ?></td>
-                <td class="text-end"><?php echo dec((string) $c['tasa_interes'], 2); ?>%</td>
+                <td class="text-end"><?php echo $c['tasa_interes'] === null ? '—' : dec((string) $c['tasa_interes'], 2) . '%'; ?></td>
                 <td class="text-center">
                   <?php if ($tieneCodeudor): ?>
                   <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#<?php echo $cdModalId; ?>">Ver</button>
@@ -223,6 +241,67 @@ function row(string $label, string $value, string $valueClass = ''): string {
     </div>
   </div>
 </div>
+
+<?php if ($puedeDetalleCr): ?>
+<!-- Modal Ver detalle de créditos -->
+<div class="modal fade" id="detalleCreditosModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-file-invoice me-2"></i>Detalle de créditos</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="table table-sm small align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th>N°</th><th>Tipo</th><th class="text-center">Inicio</th><th class="text-center">Venc.</th>
+              <th class="text-center">F. pago</th>
+              <th class="text-end">V. Inicial</th><th class="text-center">Cuotas</th><th class="text-end">Cuota</th>
+              <th class="text-end">Capital</th><th class="text-end">Mora</th><th class="text-end">Intereses</th>
+              <th class="text-center">Días</th><th class="text-center">Vencidas</th>
+              <th class="text-end">Cobranza</th><th class="text-end">Pago mín.</th>
+              <th class="text-end">Saldo total</th><th class="text-end">Tasa</th>
+              <th class="text-end">Seguro vida</th><th class="text-end">Seguro deud.</th><th class="text-end">Interés</th>
+              <th class="text-center">Cod.</th>
+            </tr></thead>
+            <tbody>
+              <?php foreach ($cr as $c): ?>
+              <tr>
+                <td><?php echo esc($c['numero_credito']); ?></td>
+                <td><?php echo esc($c['tipo_prestamo']); ?></td>
+                <td class="text-center"><?php echo fmtFecha($c['fecha_emision']); ?></td>
+                <td class="text-center"><?php echo fmtFecha($c['fecha_vencimiento']); ?></td>
+                <td class="text-center"><?php echo fmtFecha($c['fecha_pago']); ?></td>
+                <td class="text-end"><?php echo money($c['desembolso_inicial']); ?></td>
+                <td class="text-center"><?php
+                  echo (($c['cuotas_pagadas'] ?? 0) > 0 && ($c['cuotas_totales'] ?? 0) > 0)
+                    ? dec((string) $c['cuotas_pagadas']) . '/' . dec((string) $c['cuotas_totales']) : '—'; ?></td>
+                <td class="text-end"><?php echo money($c['valor_cuota']); ?></td>
+                <td class="text-end"><?php echo money($c['saldo_capital']); ?></td>
+                <td class="text-end"><?php echo money($c['saldo_mora']); ?></td>
+                <td class="text-end"><?php echo money($c['saldo_intereses']); ?></td>
+                <td class="text-center"><?php echo dec((string) $c['dias_mora']); ?></td>
+                <td class="text-center"><?php echo dec((string) $c['cuotas_vencidas']); ?></td>
+                <td class="text-end"><?php echo money($c['monto_cobranza']); ?></td>
+                <td class="text-end"><b><?php echo money($c['pago_minimo']); ?></b></td>
+                <td class="text-end"><?php echo money($c['saldo_total']); ?></td>
+                <td class="text-end"><?php echo $c['tasa_interes'] === null ? '—' : dec((string) $c['tasa_interes'], 2) . '%'; ?></td>
+                <td class="text-end"><?php echo $c['seguro_vida'] === null ? '—' : money((string) $c['seguro_vida']); ?></td>
+                <td class="text-end"><?php echo $c['seguro_deudores'] === null ? '—' : money((string) $c['seguro_deudores']); ?></td>
+                <td class="text-end"><?php echo $c['interes'] === null ? '—' : money((string) $c['interes']); ?></td>
+                <td class="text-center"><?php echo (!empty($c['codeudor_nombre']) || !empty($c['codeudor_celular'])) ? 'Sí' : '—'; ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button></div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php echo $codeudorModals ?? ''; ?>
@@ -419,6 +498,15 @@ async function toggleEstado(activo){
   if(!confirm(`¿Confirmar ${accion} al asociado?`)) return;
   try{
     await api('asociados/toggle_estado', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cedula:CED,activo:!!activo})});
+    location.reload();
+  }catch(e){alert(e.message);}
+}
+
+async function toggleOptIn(optIn){
+  const accion = optIn ? 'activar' : 'desactivar';
+  if(!confirm(`¿${accion} el opt-in de comunicaciones para este asociado?`)) return;
+  try{
+    await api('asociados/opt_in', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cedula:CED,opt_in:!!optIn})});
     location.reload();
   }catch(e){alert(e.message);}
 }

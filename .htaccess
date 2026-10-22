@@ -29,6 +29,11 @@
     RewriteRule ^uploads(/|$) - [F,L]
 </IfModule>
 
+# Tipo MIME para la documentación de la API (OpenAPI)
+<IfModule mod_mime.c>
+    AddType text/yaml .yaml .yml
+</IfModule>
+
 # No servir el .env ni archivos sensibles
 <FilesMatch "^\.env">
     Require all denied

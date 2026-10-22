@@ -24,6 +24,9 @@ if ($real === false || strpos($real, realpath($rootAbs) . DIRECTORY_SEPARATOR) !
     Http::fail('Acceso denegado', 403);
 }
 
+Logger::descarga($cedula, 'portal.aportes',
+    'Retiro #' . $id . ' (' . ($tipo === 'retiro' ? 'firma' : 'certificado') . ')');
+
 header('Content-Type: application/pdf');
 header('Content-Disposition: inline; filename="' . basename($arch['relativa']) . '"');
 header('X-Content-Type-Options: nosniff');

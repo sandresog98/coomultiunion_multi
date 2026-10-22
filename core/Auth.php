@@ -92,6 +92,11 @@ final class Auth
     public static function logout(): void
     {
         self::boot();
+        $s = $_SESSION['staff'] ?? null;
+        if (is_array($s)) {
+            Logger::log('logout', 'auth', (string) ($s['id'] ?? ''),
+                'Logout staff' . (($s['usuario'] ?? '') !== '' ? ' usuario=' . $s['usuario'] : ''));
+        }
         $_SESSION = [];
         session_destroy();
     }
@@ -99,6 +104,10 @@ final class Auth
     /** Sesión de staff válida (o null), aplicando timeout de inactividad. */
     public static function staff(): ?array
     {
+        // Autenticación por token (integraciones externas): actor sin sesión.
+        if (class_exists('TokenAuth', false) && TokenAuth::active()) {
+            return TokenAuth::actor();
+        }
         self::boot();
         $s = $_SESSION['staff'] ?? null;
         if (!is_array($s)) {
@@ -137,7 +146,15 @@ final class Auth
             self::handleUnauthenticated();
         }
         if (!Permisos::puede($s['rol'], $modulo)) {
+            Logger::log('acceso_denegado', 'seguridad', (string) ($s['id'] ?? ''),
+                'Acceso denegado al módulo ' . $modulo . ' (rol=' . ($s['rol'] ?? '') . ')', null, null, 'warning');
             Http::fail('Acceso denegado', 403);
+        }
+        // Token: además del rol, exige scope + allowlist global.
+        if (class_exists('TokenAuth', false) && TokenAuth::active() && !TokenAuth::scopePermite($modulo)) {
+            Logger::log('acceso_denegado', 'seguridad', (string) ($s['id'] ?? ''),
+                'Token sin permiso para el módulo ' . $modulo, null, null, 'warning');
+            Http::fail('Token sin permiso para este módulo', 403);
         }
         Http::csrf();
         return $s;
@@ -154,7 +171,15 @@ final class Auth
             self::handleUnauthenticated();
         }
         if (!Permisos::accion($s['rol'], $clave)) {
+            Logger::log('acceso_denegado', 'seguridad', (string) ($s['id'] ?? ''),
+                'Acceso denegado a la operación ' . $clave . ' (rol=' . ($s['rol'] ?? '') . ')', null, null, 'warning');
             Http::fail('Acceso denegado', 403);
+        }
+        // Token: además del rol, exige scope + allowlist global.
+        if (class_exists('TokenAuth', false) && TokenAuth::active() && !TokenAuth::scopePermite($clave)) {
+            Logger::log('acceso_denegado', 'seguridad', (string) ($s['id'] ?? ''),
+                'Token sin permiso para la operación ' . $clave, null, null, 'warning');
+            Http::fail('Token sin permiso para esta operación', 403);
         }
         Http::csrf();
         return $s;
