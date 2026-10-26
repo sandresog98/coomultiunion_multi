@@ -109,6 +109,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
             </select>
           </div>
         </div>
+        <small class="text-muted d-block mb-1">Solo se muestran Confiar asignados y PSE con cruce Confiar.</small>
         <small class="text-muted" id="pgInfoTotal"></small>
         <div class="mt-2" id="pgList" style="max-height:540px;overflow-y:auto">
           <div class="text-center text-muted small py-3">Cargando…</div>
@@ -308,6 +309,22 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
   </div>
 </div>
 
+<!-- Modal cédulas del cruce PSE -->
+<div class="modal fade" id="mCedulasPse" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-users me-2"></i>Cédulas del cruce PSE</h5>
+        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+      </div>
+      <div class="modal-body" id="mCedulasPseBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal" type="button">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = <?php echo json_encode(apiUrl()); ?>;
 
@@ -426,7 +443,8 @@ function pagoRowHtml(r){
   const nombre=r.asociado_nombre||r.nombre_pago||'';
   let cruz;
   if(Number(r.pse_cedulas_count)>1){
-    cruz=`<span class="text-warning"><i class="fas fa-users me-1"></i>Varias cédulas (${Number(r.pse_cedulas_count)})</span>`;
+    const asignado=ced?`<i class="fas fa-user me-1"></i>${esc(nombre||'—')} · CC ${esc(ced)} · `:'';
+    cruz=`<span class="text-warning">${asignado}<button type="button" class="btn btn-link btn-sm p-0 align-baseline text-warning fw-semibold btn-ver-cedulas" data-key="${esc(key)}" title="Cédulas PSE: ${esc(r.pse_cedulas||'')}"><i class="fas fa-users me-1"></i>Ver cédulas PSE (${Number(r.pse_cedulas_count)})</button></span>`;
   }else if(!ced){
     cruz='<span class="text-warning"><i class="fas fa-circle-question me-1"></i>Sin cédula asociada</span>';
   }else{
@@ -435,12 +453,16 @@ function pagoRowHtml(r){
   const pseInfo=(!esPse && Number(r.pse_count)>0)
     ? `<span class="badge text-bg-info">PSE ${Number(r.pse_count)} · ${money(r.pse_total)}</span>`
     : '';
+  const confiarInfo=(esPse && Number(r.confiar_count)>0)
+    ? `<span class="badge text-bg-info" title="Cruce Confiar: ${esc(r.confiar_ids||'')}">Confiar ${Number(r.confiar_count)}</span>`
+    : '';
   return `<div class="pago-row${sel} px-3 py-2 border-bottom" data-key="${esc(key)}">
     <div class="d-flex justify-content-between align-items-start gap-2">
       <div class="flex-grow-1" style="min-width:0">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <span class="badge ${badge}">${esc(String(r.origen).toUpperCase())}</span>
           <b class="small">#${esc(r.id)}</b>
+          ${confiarInfo}
           ${pseInfo}
         </div>
         <div class="small text-muted mt-1">${cruz}</div>
@@ -493,6 +515,19 @@ function seleccionarPago(key){
   selectedPago={...p,key};
   document.querySelectorAll('#pgList .pago-row').forEach(el=>el.classList.toggle('selected',el.dataset.key===key));
   updateSelSummary();
+}
+
+function verCedulasCruce(key){
+  const p=pagosCache[key]||(selectedPago&&selectedPago.key===key?selectedPago:null);
+  if(!p)return;
+  const cedulas=String(p.pse_cedulas||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const asignada=p.asociado_cedula||p.cedula_pago||'';
+  const body=document.getElementById('mCedulasPseBody');
+  body.innerHTML=(cedulas.length
+    ? '<div class="small text-muted mb-2">Cédulas de los PSE conciliados ('+cedulas.length+'):</div><ul class="list-unstyled mb-0">'+cedulas.map(c=>`<li class="py-1 border-bottom"><i class="fas fa-id-card me-2 text-muted"></i><b>${esc(c)}</b></li>`).join('')+'</ul>'
+    : '<div class="text-muted small">No hay cédulas disponibles para este cruce.</div>')
+    + (asignada?'<div class="small text-muted mt-2">Cédula asignada al Confiar: <b>'+esc(asignada)+'</b></div>':'');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('mCedulasPse')).show();
 }
 
 // ══════════ PASO 1: asociados ══════════
@@ -635,6 +670,8 @@ function renderLockedSummary(){
   if(lockedPago.fecha)extra.push(fmtDt(lockedPago.fecha));
   if(lockedPago.cedula_pago)extra.push('Cédula del pago: '+esc(lockedPago.cedula_pago));
   if(Number(lockedPago.pse_count)>0)extra.push('Cruce PSE: '+Number(lockedPago.pse_count)+' ('+money(lockedPago.pse_total)+')');
+  if(Number(lockedPago.pse_cedulas_count)>1 && lockedPago.pse_cedulas)extra.push('Cédulas PSE: '+esc(lockedPago.pse_cedulas));
+  if(Number(lockedPago.confiar_count)>0)extra.push('Cruce Confiar: '+Number(lockedPago.confiar_count)+(lockedPago.confiar_ids?' ('+esc(lockedPago.confiar_ids)+')':''));
   document.getElementById('lkPagoExtra').innerHTML=extra.join(' · ');
   document.getElementById('lkAsocNombre').textContent=lockedAsociado.nombre||'—';
   document.getElementById('lkAsocCedula').textContent=lockedAsociado.cedula;
@@ -860,6 +897,13 @@ async function eliminarTx(id){
 
 // ══════════ Eventos iniciales ══════════
 document.getElementById('pgList').addEventListener('click',function(e){
+  const btnCedulas=e.target.closest('.btn-ver-cedulas');
+  if(btnCedulas){
+    e.preventDefault();
+    e.stopPropagation();
+    verCedulasCruce(btnCedulas.dataset.key);
+    return;
+  }
   const row=e.target.closest('.pago-row');
   if(!row)return;
   seleccionarPago(row.dataset.key);
