@@ -123,7 +123,7 @@ La política y el mapeo legacy → v2 están en [`migracion_datos.md`](./migraci
 
 - El **esquema** se crea con `sql/ddl.sql` (canónico, ver §3).
 - El **migrador** es `sql/migrar_v1_a_v2.py` (Python). Migra los datos base + la **fábrica de créditos**;
-  **las solicitudes (PQRS/tickets) no se migran** (se crean desde cero en v2).
+  **no migra solicitudes (PQRS/tickets) ni logs** (se crean desde cero en v2).
 - Los **dumps legacy con datos reales NO se versionan**: colócalos en `sql/dumps/` (ignorado por git) solo en tu
   entorno local para la migración.
 - Los datos **Sifone** (asociados, datacrédito, movimientos tributarios, etc.) se cargan desde los archivos reales
