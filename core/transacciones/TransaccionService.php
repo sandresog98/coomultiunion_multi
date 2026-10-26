@@ -216,7 +216,9 @@ final class TransaccionService
                     p.estado AS estado,
                     0 AS pse_count,
                     0 AS pse_total,
-                    0 AS pse_cedulas_count
+                    0 AS pse_cedulas_count,
+                    COALESCE(pcf.confiar_count, 0) AS confiar_count,
+                    pcf.confiar_ids AS confiar_ids
                 FROM pagos_pse p
                 LEFT JOIN (
                     SELECT pse_id, SUM(valor_total) AS usado
@@ -224,9 +226,17 @@ final class TransaccionService
                     WHERE pse_id IS NOT NULL AND pse_id <> ''
                     GROUP BY pse_id
                 ) txp ON txp.pse_id = p.pse_id
+                LEFT JOIN (
+                    SELECT pse_id,
+                           COUNT(*) AS confiar_count,
+                           GROUP_CONCAT(confiar_id ORDER BY confiar_id SEPARATOR ', ') AS confiar_ids
+                    FROM pagos_conciliacion
+                    GROUP BY pse_id
+                ) pcf ON pcf.pse_id = p.pse_id
                 LEFT JOIN ($asociados) sap
                        ON sap.cedula_norm = TRIM(LEADING '0' FROM CAST(p.referencia_2 AS CHAR))
                 WHERE p.estado = 'Aprobada'
+                  AND EXISTS (SELECT 1 FROM pagos_conciliacion pc WHERE pc.pse_id = p.pse_id)
                   AND p.valor - COALESCE(txp.usado, 0) > 0";
 
         $confiar = "SELECT
@@ -252,7 +262,9 @@ final class TransaccionService
                         COALESCE(pco.estado, 'pendiente') AS estado,
                         COALESCE(psx.pse_count, 0) AS pse_count,
                         CAST(COALESCE(psx.pse_total, 0) AS DECIMAL(15,2)) AS pse_total,
-                        COALESCE(psx.pse_cedulas_count, 0) AS pse_cedulas_count
+                        COALESCE(psx.pse_cedulas_count, 0) AS pse_cedulas_count,
+                        0 AS confiar_count,
+                        NULL AS confiar_ids
                     FROM pagos_confiar c
                     LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
                     LEFT JOIN ($usadoConfiar) txc ON txc.confiar_id = c.confiar_id
@@ -268,8 +280,13 @@ final class TransaccionService
                            ON sac.cedula_norm = TRIM(LEADING '0' FROM CAST(pco.cedula AS CHAR))
                     LEFT JOIN ($asociados) sapx
                            ON sapx.cedula_norm = TRIM(LEADING '0' FROM CAST(psx.pse_cedula AS CHAR))
-                    WHERE COALESCE(pco.estado, 'pendiente') <> 'no_valido'
-                      AND c.descripcion NOT LIKE 'Consigna Liq. Intereses%'
+                    WHERE pco.estado = 'asignado'
+                      AND pco.cedula IS NOT NULL AND pco.cedula <> ''
+                      AND c.descripcion NOT LIKE '%Intereses de Ahorros%'
+                      AND c.descripcion NOT LIKE 'Reverso%'
+                      AND c.descripcion NOT LIKE '%Gravamen%'
+                      AND c.descripcion NOT LIKE 'Movimiento Saldo%'
+                      AND c.descripcion NOT LIKE 'Devoluci%Credito ACH%'
                       AND COALESCE(c.valor_consignacion, 0) - COALESCE(txc.usado, 0) > 0";
 
         $partes = [];
@@ -384,7 +401,8 @@ final class TransaccionService
 
             $st = $this->db->prepare(
                 "SELECT p.estado,
-                        p.valor - COALESCE(tx.usado, 0) AS restante
+                        p.valor - COALESCE(tx.usado, 0) AS restante,
+                        EXISTS (SELECT 1 FROM pagos_conciliacion pc WHERE pc.pse_id = p.pse_id) AS con_cruce
                  FROM pagos_pse p
                  LEFT JOIN (
                      SELECT pse_id, SUM(valor_total) AS usado
@@ -402,6 +420,9 @@ final class TransaccionService
             if ($pago['estado'] !== 'Aprobada') {
                 throw new DomainException('El pago PSE no está aprobado.');
             }
+            if (!(int) $pago['con_cruce']) {
+                throw new DomainException('El pago PSE no está validado con Confiar.');
+            }
             if ((float) $pago['restante'] + 0.01 < $valor) {
                 throw new DomainException('El pago PSE no tiene saldo suficiente.');
             }
@@ -416,6 +437,7 @@ final class TransaccionService
 
         $st = $this->db->prepare(
             "SELECT COALESCE(pco.estado, 'pendiente') AS estado,
+                    pco.cedula AS cedula_asignada,
                     COALESCE(c.valor_consignacion, 0) - COALESCE(tx.usado, 0) AS restante
              FROM pagos_confiar c
              LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
@@ -440,6 +462,9 @@ final class TransaccionService
         }
         if ($pago['estado'] === 'no_valido') {
             throw new DomainException('El pago Confiar no es válido.');
+        }
+        if ($pago['estado'] !== 'asignado' || empty($pago['cedula_asignada'])) {
+            throw new DomainException('El pago Confiar debe estar asignado a un asociado.');
         }
         if ((float) $pago['restante'] + 0.01 < $valor) {
             throw new DomainException('El pago Confiar no tiene saldo suficiente.');

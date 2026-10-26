@@ -109,6 +109,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
             </select>
           </div>
         </div>
+        <small class="text-muted d-block mb-1">Solo se muestran Confiar asignados y PSE con cruce Confiar.</small>
         <small class="text-muted" id="pgInfoTotal"></small>
         <div class="mt-2" id="pgList" style="max-height:540px;overflow-y:auto">
           <div class="text-center text-muted small py-3">Cargando…</div>
@@ -435,12 +436,16 @@ function pagoRowHtml(r){
   const pseInfo=(!esPse && Number(r.pse_count)>0)
     ? `<span class="badge text-bg-info">PSE ${Number(r.pse_count)} · ${money(r.pse_total)}</span>`
     : '';
+  const confiarInfo=(esPse && Number(r.confiar_count)>0)
+    ? `<span class="badge text-bg-info" title="Cruce Confiar: ${esc(r.confiar_ids||'')}">Confiar ${Number(r.confiar_count)}</span>`
+    : '';
   return `<div class="pago-row${sel} px-3 py-2 border-bottom" data-key="${esc(key)}">
     <div class="d-flex justify-content-between align-items-start gap-2">
       <div class="flex-grow-1" style="min-width:0">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <span class="badge ${badge}">${esc(String(r.origen).toUpperCase())}</span>
           <b class="small">#${esc(r.id)}</b>
+          ${confiarInfo}
           ${pseInfo}
         </div>
         <div class="small text-muted mt-1">${cruz}</div>
@@ -635,6 +640,7 @@ function renderLockedSummary(){
   if(lockedPago.fecha)extra.push(fmtDt(lockedPago.fecha));
   if(lockedPago.cedula_pago)extra.push('Cédula del pago: '+esc(lockedPago.cedula_pago));
   if(Number(lockedPago.pse_count)>0)extra.push('Cruce PSE: '+Number(lockedPago.pse_count)+' ('+money(lockedPago.pse_total)+')');
+  if(Number(lockedPago.confiar_count)>0)extra.push('Cruce Confiar: '+Number(lockedPago.confiar_count)+(lockedPago.confiar_ids?' ('+esc(lockedPago.confiar_ids)+')':''));
   document.getElementById('lkPagoExtra').innerHTML=extra.join(' · ');
   document.getElementById('lkAsocNombre').textContent=lockedAsociado.nombre||'—';
   document.getElementById('lkAsocCedula').textContent=lockedAsociado.cedula;
