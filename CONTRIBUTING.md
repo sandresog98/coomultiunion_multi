@@ -4,7 +4,7 @@
 
 | Rama | Uso | Protección |
 |---|---|---|
-| `main` | Producción (línea base desplegada). | PR obligatorio · sin push directo · sin force-push · sin borrar |
+| `master` | Producción (línea base desplegada). | PR obligatorio · sin push directo · sin force-push · sin borrar |
 | `develop` | Integración y **fuente del servidor de test**. | PR obligatorio · sin push directo · sin force-push · **no se elimina** |
 | `feature/*`, `fix/*`, `docs/*` | Trabajo local. | — |
 
@@ -21,18 +21,18 @@
    ```
 3. Abrir **Pull Request → `develop`** (requiere 1 aprobación).
 4. Validar en el servidor de test (despliega `develop`).
-5. Abrir **Pull Request `develop` → `main`** (requiere 1 aprobación).
-6. Merge a `main` y etiquetar el release.
+5. Abrir **Pull Request `develop` → `master`** (requiere 1 aprobación).
+6. Merge a `master` y etiquetar el release.
 
 ```
-feature/*  ──PR──▶  develop  ──PR──▶  main (producción)
+feature/*  ──PR──▶  develop  ──PR──▶  master (producción)
 ```
 
 ## Reglas de protección (GitHub)
 
 Configurar en **Settings → Rules → Rulesets** (o *Branches*):
 
-### `main`
+### `master`
 - Require a pull request before merging · **1 aprobación**.
 - Dismiss stale approvals · Require conversation resolution.
 - Block force pushes · Restrict deletions.
@@ -45,7 +45,7 @@ Configurar en **Settings → Rules → Rulesets** (o *Branches*):
 - Block force pushes · Restrict deletions (**la rama no se elimina**).
 - No permitir push directo.
 
-> Los PR hacia `main` deben originarse en `develop` (o `hotfix/*`); los PR hacia `develop`, en ramas locales.
+> Los PR hacia `master` deben originarse en `develop` (o `hotfix/*`); los PR hacia `develop`, en ramas locales.
 
 ## Base de datos
 
