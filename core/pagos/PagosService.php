@@ -158,7 +158,7 @@ final class PagosService
             }
         }
         if ($disponible) {
-            $where[] = "COALESCE(tx.usado, 0) < c.valor_consignacion - 10";
+            $where[] = "(c.valor_consignacion - COALESCE(pse.pse_total, 0)) > 10";
         }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
@@ -196,6 +196,7 @@ final class PagosService
                     c.valor_consignacion - COALESCE(tx.usado, 0) AS restante,
                     COALESCE(pse.pse_count, 0) AS pse_count,
                     COALESCE(pse.pse_total, 0) AS pse_total,
+                    GREATEST(0, c.valor_consignacion - COALESCE(pse.pse_total, 0)) AS pse_restante,
                     COALESCE(pse.pse_cedulas_count, 0) AS pse_cedulas_count,
                     pse.pse_cedula
              $from ORDER BY `$orderBy` $orderDir LIMIT ? OFFSET ?"
@@ -254,13 +255,47 @@ final class PagosService
     /** Crea un enlace de conciliación PSE↔Confiar manual. */
     public function conciliar(string $pseId, string $confiarId, string $tipo = 'manual', ?array $actor = null): void
     {
-        $ePse = $this->db->prepare("SELECT pse_id FROM pagos_pse WHERE pse_id = ?");
+        $ePse = $this->db->prepare("SELECT pse_id, valor FROM pagos_pse WHERE pse_id = ?");
         $ePse->execute([$pseId]);
-        if (!$ePse->fetch()) throw new DomainException('PSE ID no encontrado.');
+        $pse = $ePse->fetch();
+        if (!$pse) throw new DomainException('PSE ID no encontrado.');
 
-        $eCon = $this->db->prepare("SELECT confiar_id FROM pagos_confiar WHERE confiar_id = ?");
+        $eCon = $this->db->prepare("SELECT confiar_id, valor_consignacion FROM pagos_confiar WHERE confiar_id = ?");
         $eCon->execute([$confiarId]);
-        if (!$eCon->fetch()) throw new DomainException('Confiar ID no encontrado.');
+        $confiar = $eCon->fetch();
+        if (!$confiar) throw new DomainException('Confiar ID no encontrado.');
+
+        // Un PSE solo puede estar conciliado con un Confiar.
+        $st = $this->db->prepare("SELECT confiar_id FROM pagos_conciliacion WHERE pse_id = ? LIMIT 1");
+        $st->execute([$pseId]);
+        $linked = $st->fetchColumn();
+        if ($linked !== false) {
+            if ((string) $linked === $confiarId) {
+                return;
+            }
+            throw new DomainException('El PSE ya está asignado a otro Confiar.');
+        }
+
+        // Capacidad PSE del Confiar: valor - PSE ya asignados (sin contar este).
+        $st = $this->db->prepare(
+            "SELECT COALESCE(SUM(p.valor), 0)
+             FROM pagos_conciliacion pc
+             JOIN pagos_pse p ON p.pse_id = pc.pse_id
+             WHERE pc.confiar_id = ? AND pc.pse_id <> ?"
+        );
+        $st->execute([$confiarId, $pseId]);
+        $pseTotal = (float) $st->fetchColumn();
+        $confiarValor = (float) $confiar['valor_consignacion'];
+        $pseValor = (float) $pse['valor'];
+        $disponible = max(0, $confiarValor - $pseTotal);
+        if ($pseValor > $disponible + 0.5) {
+            throw new DomainException(
+                'El Confiar ' . $confiarId . ' solo tiene $' .
+                number_format($disponible, 0, ',', '.') .
+                ' disponible para PSE; este PSE es de $' .
+                number_format($pseValor, 0, ',', '.') . '.'
+            );
+        }
 
         $this->db->prepare("INSERT IGNORE INTO pagos_conciliacion (pse_id, confiar_id, tipo) VALUES (?,?,?)")
                   ->execute([$pseId, $confiarId, $tipo]);
