@@ -239,7 +239,7 @@ function renderItemsTable(ac,campos,docs){
     const btn=(onclick,ttl,ic,cls)=>`<button class="btn btn-sm ${cls}" title="${ttl}" onclick="${onclick}"><i class="${ic}"></i></button>`;
     const up=SEC_ADJ?btn(`subirDoc('${ac}','${d.tipo_documento}')`,doc?'Reemplazar':'Subir',doc?'fas fa-rotate':'fas fa-upload','btn-outline-secondary'):'';
     const ver=doc?`<a class="btn btn-sm btn-outline-primary" title="Ver" href="${API}creditos/serve_documento?id=${doc.id}" target="_blank"><i class="fas fa-eye"></i></a>`:'';
-    const del=SEC_ADJ&&doc?btn(`eliminarDoc(${doc.id},${JSON.stringify(esc(d.nombre_mostrar)||'')})`,'Eliminar','fas fa-trash','btn-outline-danger'):'';
+    const del=SEC_ADJ&&doc?`<button class="btn btn-sm btn-outline-danger" title="Eliminar" data-nombre="${esc(d.nombre_mostrar||'')}" onclick="eliminarDoc(${doc.id},this.dataset.nombre)"><i class="fas fa-trash"></i></button>`:'';
     return `<tr><td class="text-center text-muted">·</td><td class="text-nowrap"><span class="badge text-bg-primary">Documento</span></td>
       <td class="text-nowrap">${esc(d.nombre_mostrar)}${d.es_obligatorio?'<span class="text-danger">*</span>':''}</td>
       <td><div class="d-flex gap-1 align-items-center justify-content-end text-nowrap">
