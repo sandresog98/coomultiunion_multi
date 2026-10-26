@@ -143,48 +143,6 @@ async function guardarConciliacion(e){
     cargar();
   }catch(e){alert(e.message);}
 }
-function setupConfiarAuto(){
-  const input=document.getElementById('cc_confiar_input'),hidden=document.getElementById('cc_confiar_id'),cont=document.getElementById('cc_confiar_res');
-  input.addEventListener('input',function(){
-    const q=(this.value||'').trim();hidden.value='';clearTimeout(debounceTimer);
-    if(q.length<1){cont.innerHTML='';return;}
-    cont.innerHTML='<div class="list-group-item text-muted">Buscando…</div>';
-    debounceTimer=setTimeout(async()=>{
-      try{
-        const d=await apicall('pagos/listar?tipo=confiar&q='+encodeURIComponent(q)+'&limit=10');
-        const rows=(d.rows||[]).filter(r=>Number(r.restante||0)>0 && (!r.confirmacion_estado||r.confirmacion_estado==='pendiente'));
-        if(!rows.length){cont.innerHTML='<div class="list-group-item text-muted">Sin Confiar disponibles</div>';return;}
-        cont.innerHTML=rows.map(r=>`<button type="button" class="list-group-item list-group-item-action" data-id="${esc(r.confiar_id)}" data-txt="${esc(r.confiar_id)} · ${esc(r.descripcion||'')} · $${Number(r.restante||0).toLocaleString('es-CO')} disp.">${esc(r.confiar_id)} — <small>${esc(r.descripcion||'')}</small> <span class="text-muted">$${Number(r.restante||0).toLocaleString('es-CO')} disp.</span></button>`).join('');
-        cont.querySelectorAll('button').forEach(b=>b.addEventListener('mousedown',e=>{e.preventDefault();hidden.value=b.dataset.id;input.value=b.dataset.txt||b.dataset.id;cont.innerHTML='';}));
-      }catch(_){cont.innerHTML='<div class="list-group-item text-danger">Error de búsqueda</div>';}
-    },300);
-  });
-  document.addEventListener('mousedown',e=>{if(!cont.contains(e.target)&&e.target!==input)cont.innerHTML='';});
-}
-function renderConfiarRows(rows, emptyMsg, title){
-  const cont=document.getElementById('cc_confiar_res');
-  if(!rows.length){cont.innerHTML='<div class="list-group-item text-muted">'+(emptyMsg||'Sin resultados')+'</div>';return;}
-  const head=title?`<div class="list-group-item bg-light small text-muted py-1">${esc(title)}</div>`:'';
-  cont.innerHTML=head+rows.map(r=>{
-    const rest=Number(r.restante||0);
-    const txt=(r.confiar_id||'')+' - '+(r.descripcion||'')+' - '+money(rest)+' disp.';
-    return `<button type="button" class="list-group-item list-group-item-action" data-id="${esc(r.confiar_id)}" data-txt="${esc(txt)}"><div class="d-flex justify-content-between gap-2"><span class="text-truncate"><strong>${esc(r.confiar_id)}</strong> <small class="text-muted">${esc(r.descripcion||'')}</small></span><span class="small text-nowrap">${money(rest)} disp.</span></div></button>`;
-  }).join('');
-  bindConfiarButtons();
-}
-function bindConfiarButtons(){
-  const input=document.getElementById('cc_confiar_input'),hidden=document.getElementById('cc_confiar_id'),cont=document.getElementById('cc_confiar_res');
-  cont.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('mousedown',e=>{e.preventDefault();hidden.value=b.dataset.id;input.value=b.dataset.txt||b.dataset.id;cont.innerHTML='';}));
-}
-async function cargarConfiarDisponibles(){
-  const cont=document.getElementById('cc_confiar_res');
-  cont.innerHTML='<div class="list-group-item text-muted">Cargando Credito ACH con saldo disponible...</div>';
-  try{
-    const d=await apicall('pagos/listar?tipo=confiar&descripcion=Credito ACH&disponible=1&limit=50&order=fecha&dir=DESC');
-    const rows=(d.rows||[]).filter(r=>Number(r.restante||0)>0 && (!r.confirmacion_estado||r.confirmacion_estado==='pendiente'));
-    renderConfiarRows(rows,'Sin Credito ACH con saldo disponible','Credito ACH con saldo disponible');
-  }catch(e){cont.innerHTML='<div class="list-group-item text-danger">Error al cargar</div>';}
-}
 function setupConfiarTabla(){
   const input=document.getElementById('cc_confiar_input');
   if(!input)return;
