@@ -11,7 +11,7 @@ require_once dirname(__DIR__) . '/Logger.php';
 final class PagosService
 {
     private const PSE_ORDER_COLS = ['pse_id', 'valor', 'usado', 'restante', 'estado', 'referencia_2', 'fecha_resolucion'];
-    private const CONF_ORDER_COLS = ['confiar_id', 'valor_consignacion', 'usado', 'restante', 'descripcion', 'cedula', 'confirmacion_estado', 'fecha'];
+    private const CONF_ORDER_COLS = ['confiar_id', 'valor_consignacion', 'usado', 'restante', 'pse_count', 'descripcion', 'cedula', 'confirmacion_estado', 'fecha'];
 
     public function __construct(private ?PDO $db = null)
     {
@@ -19,7 +19,7 @@ final class PagosService
     }
 
     /** Lista pagos PSE con filtros, ordenamiento y paginación. */
-    public function listarPse(string $q = '', string $estado = '', string $conciliado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha_resolucion', string $orderDir = 'DESC', int $limit = 20, int $offset = 0): array
+    public function listarPse(string $q = '', string $estado = '', string $conciliado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha_resolucion', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $confiarId = ''): array
     {
         if (!in_array($orderBy, self::PSE_ORDER_COLS, true)) { $orderBy = 'fecha_resolucion'; }
         $orderDir = strtoupper($orderDir) === 'ASC' ? 'ASC' : 'DESC';
@@ -39,6 +39,10 @@ final class PagosService
             $where[] = "pc.confiar_id IS NOT NULL";
         } elseif ($conciliado === '0') {
             $where[] = "pc.confiar_id IS NULL";
+        }
+        if ($confiarId !== '') {
+            $where[] = "pc.confiar_id = ?";
+            $params[] = $confiarId;
         }
         if ($fechaDesde !== '') { $where[] = "DATE(p.fecha_resolucion) >= ?"; $params[] = $fechaDesde; }
         if ($fechaHasta !== '') { $where[] = "DATE(p.fecha_resolucion) <= ?"; $params[] = $fechaHasta; }
@@ -82,7 +86,7 @@ final class PagosService
     }
 
     /** Lista pagos Confiar con filtros, ordenamiento y paginación. */
-    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0): array
+    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $pse = ''): array
     {
         if (!in_array($orderBy, self::CONF_ORDER_COLS, true)) { $orderBy = 'fecha'; }
         $orderDir = strtoupper($orderDir) === 'ASC' ? 'ASC' : 'DESC';
@@ -107,11 +111,20 @@ final class PagosService
         } elseif ($asignacion === 'completo') {
             $where[] = "COALESCE(tx.usado, 0) >= c.valor_consignacion";
         }
+        if ($pse === 'con') {
+            $where[] = "COALESCE(pse.pse_count, 0) > 0";
+        } elseif ($pse === 'sin') {
+            $where[] = "COALESCE(pse.pse_count, 0) = 0";
+        }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $from = "FROM pagos_confiar c
                  LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
                  LEFT JOIN (SELECT confiar_id, SUM(valor_total) AS usado FROM transacciones GROUP BY confiar_id) tx ON tx.confiar_id = c.confiar_id
+                 LEFT JOIN (SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total
+                            FROM pagos_conciliacion pc
+                            JOIN pagos_pse p ON p.pse_id = pc.pse_id
+                            GROUP BY pc.confiar_id) pse ON pse.confiar_id = c.confiar_id
                  $w";
 
         $st = $this->db->prepare("SELECT COUNT(*) $from");
@@ -122,7 +135,9 @@ final class PagosService
             "SELECT c.*, pco.id AS confirmacion_id, pco.cedula, pco.ruta_comprobante,
                     pco.comentario, COALESCE(pco.estado,'pendiente') AS confirmacion_estado, pco.motivo_rechazo,
                     COALESCE(tx.usado, 0) AS usado,
-                    c.valor_consignacion - COALESCE(tx.usado, 0) AS restante
+                    c.valor_consignacion - COALESCE(tx.usado, 0) AS restante,
+                    COALESCE(pse.pse_count, 0) AS pse_count,
+                    COALESCE(pse.pse_total, 0) AS pse_total
              $from ORDER BY `$orderBy` $orderDir LIMIT ? OFFSET ?"
         );
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);
