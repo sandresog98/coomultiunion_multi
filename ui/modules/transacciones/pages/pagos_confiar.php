@@ -81,7 +81,7 @@ let state={q:'',descripcion:'Credito ACH',estado:'',asignacion:'',pse:'',desde:'
 let mConfirmar,mRechazar,mPseDetalle,debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
+function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:2});}
 function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 async function apicall(p,o){let r=await fetch(API+p,o),j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
 
