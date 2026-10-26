@@ -44,7 +44,7 @@ except ImportError:
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 BLOCKS = ["usuarios", "asociados", "productos", "asignaciones", "movimientos",
-          "logs", "pagos", "cobranza", "creditos", "convenios", "tienda"]
+          "pagos", "cobranza", "creditos", "convenios", "tienda"]
 
 # Cobranza: etiquetas legacy -> codigo v2
 COBRANZA_ESTADO = {
@@ -305,28 +305,6 @@ def block_movimientos(src, dst, args):
         n2 += 1
     dst.commit()
     return f"movimientos_multi: {n1} comisiones + {n2} redenciones"
-
-
-def block_logs(src, dst, args):
-    sc, dc = src.cursor(), dst.cursor()
-    if args.reset:
-        truncate(dc, "logs")
-    dc.execute("SELECT id FROM usuarios")
-    users = {r[0] for r in dc.fetchall()}
-    sc.execute("""SELECT id,id_usuario,timestamp,accion,modulo,detalle,ip_address,user_agent,
-                         datos_anteriores,datos_nuevos,nivel
-                  FROM control_logs ORDER BY id""")
-    rows = []
-    for r in fetch_dicts(sc):
-        uid = r["id_usuario"] if (r["id_usuario"] in users) else None
-        rows.append((r["id"], uid, r["timestamp"], r["accion"], r["modulo"], r.get("detalle"),
-                     r.get("ip_address"), r.get("user_agent"), r.get("datos_anteriores"),
-                     r.get("datos_nuevos"), r.get("nivel")))
-    n = insert_many(dc, "logs",
-                    ["id", "id_usuario", "timestamp", "accion", "modulo", "detalle", "ip_address",
-                     "user_agent", "datos_anteriores", "datos_nuevos", "nivel"], rows, chunk=1000)
-    dst.commit()
-    return f"logs: {n}"
 
 
 def block_pagos(src, dst, args):
@@ -773,7 +751,6 @@ HANDLERS = {
     "productos": block_productos,
     "asignaciones": block_asignaciones,
     "movimientos": block_movimientos,
-    "logs": block_logs,
     "pagos": block_pagos,
     "cobranza": block_cobranza,
     "creditos": block_creditos,
