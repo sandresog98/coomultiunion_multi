@@ -2554,3 +2554,10 @@ INSERT INTO app_configuracion (clave, valor, descripcion) VALUES
   ('com_ayuda_texto',                'Para dejar de recibir mensajes responde BAJA. Para ayuda responde AYUDA.', 'Texto de ayuda para inbound')
 ON DUPLICATE KEY UPDATE clave = clave;
 
+-- Parámetros de crédito cooperativa para boletas (mismos defaults que ConfigService).
+INSERT INTO app_configuracion (clave, valor, descripcion) VALUES
+  ('boleta_credito_meses_min',   '6',      'Antigüedad mínima (meses) para crédito cooperativa en boletas'),
+  ('boleta_credito_aportes_min', '6',      'N° mínimo de pagos de aportes ordinarios para crédito cooperativa'),
+  ('boleta_credito_limite',      '100000', 'Límite en pesos del crédito cooperativa para boletas')
+ON DUPLICATE KEY UPDATE clave = clave;
+

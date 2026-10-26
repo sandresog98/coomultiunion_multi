@@ -93,6 +93,23 @@ BOLETERIA_CONVENIO = {
     "SALITRE MAGICO": 3, "COMBO KFC": 25,
 }
 
+# Alias Sifone (tipopr) por nombre de línea de crédito -> credito_lineas.sifone_alias.
+# Los usa vw_creditos para resolver tasa/seguro. Antes vivía en la migración 014.
+SIFONE_ALIAS = {
+    "CONSUMO 1.7 ESPECIAL 2025": "consumo,consumo-,consumo-25,CONSUMO-24",
+    "CREDIAGIL 1.9 2026": "CREDIAGIL-2026",
+    "CONSUMO 1.8 ESPECIAL 2026": "CONSUMO ESPECIAL 1.8-2026",
+    "BAJO CONSUMO 2.0 NUE AP 2026": "BAJO CONSUMO 2026",
+    "LIBRANZA 1.5 2026": "LIBRANZA  1.5-2026",
+    "CREDI-APORTES 2026": "CREDI-PORTES-2026",
+    "CREDIPOLIZA 1.4 2026": "CREDIPOLIZA  1.4-2026",
+    "TECNO-TELMOVIL 2026": "TECNO-TELMOVIL -2026",
+    "EDUCACION 1.5 APORTE 2026": "EDUCACION  1.5-2026",
+    "CONSUMO 1.7 ESPECIAL 2026": "CONSUMO-ESPECIAL-1.7-2026",
+    "CRED-APORTES PLUS": "CREDIAPORTES PLUS-2026",
+    "EMPRENDER 2.1 2026": "EMPRENDER-2.1-2026",
+}
+
 
 def env_cfg(prefix, default_db):
     return {
@@ -485,11 +502,12 @@ def block_creditos(src, dst, args):
                   FROM control_tasas_creditos ORDER BY id""")
     rows = [(r["id"], r["nombre_credito"], r["limite_meses"], r["tasa"], r["seguro_vida"],
              r["seguro_deudores"], r["estado_activo"], r["mostrar_en_fabrica"], r.get("creado_por"),
-             r["fecha_creacion"], r["fecha_actualizacion"]) for r in fetch_dicts(sc)]
+             r["fecha_creacion"], r["fecha_actualizacion"],
+             SIFONE_ALIAS.get((r["nombre_credito"] or "").strip())) for r in fetch_dicts(sc)]
     n_lineas = insert_many(dc, "credito_lineas",
                            ["id", "nombre_credito", "limite_meses", "tasa", "seguro_vida",
                             "seguro_deudores", "estado_activo", "mostrar_en_fabrica", "creado_por",
-                            "fecha_creacion", "fecha_actualizacion"], rows)
+                            "fecha_creacion", "fecha_actualizacion", "sifone_alias"], rows)
 
     # 2) solicitudes
     sc.execute("""SELECT id,numero_solicitud,tipo_solicitante,nombre_solicitante,numero_identificacion,

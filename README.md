@@ -26,7 +26,7 @@ Sistema de gestión de una **cooperativa financiera** (PHP 8.2 / MariaDB 11.8, s
 - **Sin llaves foráneas** en la BD (relaciones en comentarios `-- FK:`).
 - **Sin ENUM** (valores posibles en comentarios `-- valores:`).
 - **Prefijo de módulo** en tablas (`solicitudes_*`, `sifone_*`, `pagos_*`, `transacciones_*`, `tienda_*`, …).
-- **`sql/ddl.sql`** = esquema canónico único (+ `reset_db.sql` y `sql/migrations/`).
+- **`sql/ddl.sql`** = esquema canónico único y **congelado** (las migraciones históricas quedaron consolidadas; ver `sql/migrations/README.md`).
 - **Secretos en `.env`** (nunca en código ni versionados). Roles/permisos en `ui/config/secciones.php`.
 - **Uploads con nombre único**, servidos **solo por API autenticada** (id opaco + verificación de dueño) — nunca ruta directa.
 - **API-first**: la lógica vive en `core/` (servicios) y se expone por endpoints JSON; las páginas solo renderizan.
@@ -52,7 +52,7 @@ multi/
 ├── cx/                   # portal del asociado (login, modules/*)
 ├── tienda/ · convenios/ · simulador/   # superficies públicas
 ├── assets/               # css/js/img/favicons compartidos
-├── sql/                  # ddl.sql (canónico), migrations/  (dumps/ = local, ignorado)
+├── sql/                  # ddl.sql (canónico y congelado), migrations/ (futuras), dumps/ (local, ignorado)
 ├── utils/                # vendor (tcpdf, r2min, simplexls/simplexlsx) + ExcelGenerator
 └── uploads/              # archivos (NUNCA servidos por URL directa)
 ```
@@ -106,62 +106,16 @@ Convenios (carrito de boletas) · Notificaciones · Asistente IA (chat).
 
 ---
 
-## 3. Entorno y comandos
+## 3. Base de datos y migración
 
-### Windows (XAMPP local — validado)
-
-Se usa **MariaDB 11.8.9 como instancia separada** (para igualar la versión de producción), dejando la MariaDB 10.4
-de XAMPP intacta para el resto de proyectos. Se extrajo en `C:\xampp\mariadb-11.8.9-winx64`, datadir `data/`, puerto **3307**.
-
-```powershell
-# 1) Iniciar MariaDB 11.8.9 (si no está corriendo)
-Start-Process "C:\xampp\mariadb-11.8.9-winx64\bin\mysqld.exe" -ArgumentList "--basedir=C:\xampp\mariadb-11.8.9-winx64","--datadir=C:\xampp\mariadb-11.8.9-winx64\data","--port=3307" -WindowStyle Hidden
-
-# 2) Conectar
-C:\xampp\mariadb-11.8.9-winx64\bin\mysql.exe --port=3307 -u root
-
-# 3) Crear/cargar el esquema canónico (BD = multi_app_v2)
-C:\xampp\mariadb-11.8.9-winx64\bin\mysql.exe --port=3307 -u root -e "CREATE DATABASE IF NOT EXISTS multi_app_v2 CHARACTER SET utf8mb4"
-cmd /c "C:\xampp\mariadb-11.8.9-winx64\bin\mysql.exe --port=3307 -u root multi_app_v2 < sql\ddl.sql"
-```
-
-El `.env` local ya apunta a `DB_HOST=127.0.0.1` / `DB_PORT=3307` (ver `.env.example` para todas las variables).
-
-### Linux (XAMPP)
+> **`sql/ddl.sql` es la línea base congelada del esquema.** No se edita: una BD nueva se crea solo con este archivo.
+> Los cambios de esquema posteriores van como migraciones nuevas en `sql/migrations/` (ver su `README.md`).
 
 ```bash
-MYSQL=/opt/lampp/bin/mysql
-SOCK=/opt/lampp/var/mysql/mysql.sock
-$MYSQL -u root --socket=$SOCK -e "DROP DATABASE IF EXISTS multi_app_v2; CREATE DATABASE multi_app_v2 CHARACTER SET utf8mb4;"
-$MYSQL -u root --socket=$SOCK multi_app_v2 < sql/ddl.sql
+# Crear la BD y cargar el esquema canónico
+mysql -u USER -p -e "CREATE DATABASE multi_app_v2 CHARACTER SET utf8mb4;"
+mysql -u USER -p multi_app_v2 < sql/ddl.sql
 ```
-
-### Servir la app
-
-Con Apache de XAMPP (URLs limpias vía `.htaccess`, sin `.php`):
-
-- Hub: `http://localhost/projects/multi/multi/`
-- Staff: `http://localhost/projects/multi/multi/ui/login`
-- Portal: `http://localhost/projects/multi/multi/cx/login`
-- Tienda: `http://localhost/projects/multi/multi/tienda/`
-- Convenios: `http://localhost/projects/multi/multi/convenios/`
-- Simulador: `http://localhost/projects/multi/multi/simulador/`
-
-El portal CX usa URLs amigables (tabla única en `cx/routes.php`), por ejemplo
-`/cx/aportes`, `/cx/solicitudes/mis`, `/cx/solicitar-credito`. Las rutas largas
-antiguas (`/cx/modules/.../pages/...`) siguen funcionando sin cambios.
-
-O con el servidor embebido (sin Apache):
-
-```bash
-php -S 127.0.0.1:8099 -t .     # luego http://127.0.0.1:8099/ui/login
-```
-
-### Credenciales de desarrollo
-
-- **Staff**: `admin` / `Admin123*` (contraseña de un solo uso; pide cambiarla al primer ingreso).
-- **Portal**: un asociado con cédula y contraseña (hashes bcrypt en `asociados_control`). Si un asociado histórico
-  tiene `password_hash = NULL`, el primer acceso pasa por el flujo `password_crear` (código de 6 dígitos por email).
 
 ### Migración de datos (legacy → v2)
 

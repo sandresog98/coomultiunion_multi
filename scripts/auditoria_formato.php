@@ -15,7 +15,7 @@ declare(strict_types=1);
  *   /opt/lampp/bin/php scripts/auditoria_formato.php --aplicar     # RENOMBRA físicos + UPDATE BD (idempotente)
  *   /opt/lampp/bin/php scripts/auditoria_formato.php --modulo=creditos   # restringir a un módulo
  *   /opt/lampp/bin/php scripts/auditoria_formato.php --r2          # además verifica objetos R2 (lento, usa red)
- *   /opt/lampp/bin/php scripts/auditoria_formato.php --csv="sql/migrations/ali_mapa.csv"
+ *   /opt/lampp/bin/php scripts/auditoria_formato.php --csv="sql/dumps/ali_mapa.csv"
  *
  * Clases por fila:
  *   ALINEADA      : la ruta actual ya es el opaco §2.3 esperado y el físico existe.
@@ -50,7 +50,7 @@ foreach ($argv as $i => $a) {
     if (str_starts_with((string) $a, '--modulo=')) { $moduloF = substr((string) $a, strlen('--modulo=')); }
     if (str_starts_with((string) $a, '--csv='))   { $csvPath = substr((string) $a, strlen('--csv=')); }
 }
-if ($csvPath === null) { $csvPath = $root . '/sql/migrations/ali_' . $NOW . '_mapa.csv'; }
+if ($csvPath === null) { $csvPath = $root . '/sql/dumps/ali_' . $NOW . '_mapa.csv'; }
 
 /**
  * @var array<string, array{tabla:string,col:string,id:string,codigo:string,base:string,

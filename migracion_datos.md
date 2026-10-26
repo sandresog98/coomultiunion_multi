@@ -205,10 +205,12 @@ Con los rangos sembrados se restaura la lógica original de **dos precios** aun 
 - **Del flujo nuevo**: `tienda_venta_detalle_stock` vincula cada unidad consumida; `tienda_ventas.tipo_cliente` `asociado|externo`; `tienda_venta_pagos.tipo` `efectivo|bold|qr|sifone|sistecredito|alocredito|bono`.
 - **Validación**: conteos verificados (23/23/567/17/44/12) y **0 FKs huérfanos** cerrando la migración.
 
-### 11.5 Recarga selectiva del esquema
+### 11.5 Línea base del esquema (congelada)
 
-`sql/ddl.sql` contiene el seed de `credito_config_seccion` (B7a) con `INSERT` plano (no `INSERT IGNORE`), por lo que **no se recarga sobre una BD ya poblada**: usar BD fresca (DROP+CREATE) o recargar solo la sección nueva, p. ej.:
-`sed -n '/MÓDULO: Tienda/, $p' sql/ddl.sql | mysql multi_app_v2`
+`sql/ddl.sql` es la **línea base congelada** del esquema: una BD nueva se crea **solo** con ese archivo.
+No se edita después del despliegue (afectaría la trazabilidad/auditoría de las BD ya creadas). Cualquier
+cambio de esquema posterior se agrega como **migración nueva** en `sql/migrations/` (ver su `README.md`).
+Las migraciones históricas (`001`–`017`) ya están consolidadas en el DDL.
 
 ---
 
