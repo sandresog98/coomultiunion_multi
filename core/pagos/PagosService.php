@@ -68,6 +68,8 @@ final class PagosService
             "SELECT p.*, pc.confiar_id AS conciliado_confiar, pc.tipo AS conciliacion_tipo,
                     COALESCE(tx.usado, 0) AS usado,
                     p.valor - COALESCE(tx.usado, 0) AS restante,
+                    tx.cedula AS cedula_movimiento,
+                    td.movimientos,
                     c.fecha AS confiar_fecha, c.descripcion AS confiar_descripcion,
                     c.documento AS confiar_documento, c.oficina AS confiar_oficina,
                     c.valor_consignacion AS confiar_valor, c.valor_retiro AS confiar_retiro,
@@ -75,7 +77,21 @@ final class PagosService
              FROM pagos_pse p
              LEFT JOIN pagos_conciliacion pc ON pc.pse_id = p.pse_id
              LEFT JOIN pagos_confiar c ON c.confiar_id = pc.confiar_id
-             LEFT JOIN (SELECT pse_id, SUM(valor_total) AS usado FROM transacciones GROUP BY pse_id) tx ON tx.pse_id = p.pse_id
+             LEFT JOIN (SELECT pse_id, SUM(valor_total) AS usado, MAX(cedula) AS cedula FROM transacciones GROUP BY pse_id) tx ON tx.pse_id = p.pse_id
+             LEFT JOIN (
+                 SELECT t.pse_id,
+                        JSON_ARRAYAGG(JSON_OBJECT(
+                            'tipo', d.tipo_rubro,
+                            'referencia', d.referencia_credito,
+                            'producto_id', d.producto_id,
+                            'descripcion', d.descripcion,
+                            'valor', d.valor_asignado
+                        )) AS movimientos
+                 FROM transacciones t
+                 JOIN transacciones_detalle d ON d.transaccion_id = t.id
+                 WHERE d.valor_asignado > 0
+                 GROUP BY t.pse_id
+             ) td ON td.pse_id = p.pse_id
              $w ORDER BY `$orderBy` $orderDir LIMIT ? OFFSET ?"
         );
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);
