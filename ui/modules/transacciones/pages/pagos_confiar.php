@@ -103,6 +103,16 @@ async function cargar(){
     let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+state.size,t)} de ${t}`:'';renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       let est=r.confirmacion_estado||'pendiente',acc='';
+      const hasPse=Number(r.pse_count||0)>0, usadoN=Number(r.usado||0), valorN=Number(r.valor_consignacion||0);
+      let estadoLabel='Pendiente',estadoClass='secondary';
+      if(est==='asignado'){estadoLabel='Asignado';estadoClass='success';}
+      else if(est==='no_valido'){estadoLabel='No válido';estadoClass='danger';}
+      else if(hasPse){
+        if(valorN>0 && usadoN>=valorN){estadoLabel='Asignado PSE';estadoClass='success';}
+        else if(usadoN>0){estadoLabel='Parcial PSE';estadoClass='warning';}
+        else{estadoLabel='Cubierto PSE';estadoClass='info';}
+      }
+      const cedula=r.cedula || (hasPse ? (Number(r.pse_cedulas_count)===1 ? (r.pse_cedula||'') : (Number(r.pse_cedulas_count)>1 ? 'Varios ('+r.pse_cedulas_count+')' : '')) : '') || '—';
       if(est==='asignado')acc=`<button class="btn btn-sm btn-outline-warning" onclick="desasignarConfiar('${esc(r.confiar_id)}')" title="Desasignar"><i class="fas fa-undo"></i></button>`;
       else if(est==='pendiente')acc=`<div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="abrirConfirmar('${esc(r.confiar_id)}')" title="Asignar"><i class="fas fa-user-check"></i></button><button class="btn btn-outline-danger" onclick="abrirRechazar('${esc(r.confiar_id)}')" title="No válido"><i class="fas fa-ban"></i></button></div>`;
       else acc=`<button class="btn btn-sm btn-outline-secondary" onclick="desasignarConfiar('${esc(r.confiar_id)}')" title="Revertir a pendiente"><i class="fas fa-undo"></i></button>`;
@@ -111,7 +121,7 @@ async function cargar(){
       let pseCell=Number(r.pse_count||0)>0
         ? `<button class="btn btn-sm btn-outline-info" onclick="verPseDetalle('${esc(r.confiar_id)}')" title="PSE conciliados: ${r.pse_count} (${money(r.pse_total)})">${r.pse_count}</button><div class="small text-muted">${money(r.pse_total)}</div>`
         : '<span class="text-muted">&#8212;</span>';
-      return`<tr><td><small>${esc(r.confiar_id)}</small></td><td class="text-end">${money(r.valor_consignacion)}</td><td class="text-end">${money(r.usado)}</td><td class="text-end">${money(r.restante)}</td><td class="text-center">${pseCell}</td><td class="text-truncate" style="max-width:180px">${esc(r.descripcion)}</td><td>${esc(r.cedula||'—')}</td><td>${est==='asignado'?'<span class="badge text-bg-success">Asignado</span>':est==='no_valido'?'<span class="badge text-bg-danger">No válido</span>':'<span class="badge text-bg-secondary">Pendiente</span>'}</td><td class="text-center">${r.ruta_comprobante?`<a href="${API}pagos/serve_file?f=${encodeURIComponent(r.ruta_comprobante)}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-file"></i></a>`:'—'}</td><td><small>${fmtDt(r.fecha)}</small></td><td>${acc}</td></tr>`;
+      return`<tr><td><small>${esc(r.confiar_id)}</small></td><td class="text-end">${money(r.valor_consignacion)}</td><td class="text-end">${money(r.usado)}</td><td class="text-end">${money(r.restante)}</td><td class="text-center">${pseCell}</td><td class="text-truncate" style="max-width:180px">${esc(r.descripcion)}</td><td>${esc(cedula)}</td><td><span class="badge text-bg-${estadoClass}">${esc(estadoLabel)}</span></td><td class="text-center">${r.ruta_comprobante?`<a href="${API}pagos/serve_file?f=${encodeURIComponent(r.ruta_comprobante)}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-file"></i></a>`:'—'}</td><td><small>${fmtDt(r.fecha)}</small></td><td>${acc}</td></tr>`;
     }).join('')||'<tr><td colspan="11" class="text-center text-muted">Sin resultados</td></tr>';
     renderPagination(t);
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
