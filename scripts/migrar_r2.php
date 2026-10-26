@@ -75,7 +75,8 @@ foreach ($modulos as $mod) {
 
     foreach ($iterator as $abs) {
         $rel = substr($abs, strlen($uploads) + 1); // 'modulo/...'
-        $key = ltrim($rel, '/');
+        // Normaliza separadores de Windows: la clave R2 debe usar '/' siempre.
+        $key = ltrim(str_replace('\\', '/', $rel), '/');
         if ($key === '' || str_starts_with($key, '.backup_r2')) {
             continue;
         }
