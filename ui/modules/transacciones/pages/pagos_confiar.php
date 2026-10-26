@@ -158,9 +158,34 @@ async function verPseDetalle(confiarId){
     const rows=d.rows||[];
     const total=rows.reduce((s,r)=>s+Number(r.valor||0),0);
     let h=`<h6 class="text-brand mb-1">${esc(confiarId)}</h6><div class="small text-muted mb-2">${rows.length} PSE &middot; ${money(total)}</div>`;
-    h += rows.length
-      ? `<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>PSE ID</th><th class="text-end">Valor</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>${rows.map(r=>`<tr><td><small>${esc(r.pse_id)}</small></td><td class="text-end">${money(r.valor)}</td><td><span class="badge text-bg-${r.estado==='Aprobada'?'success':'danger'}">${esc(r.estado)}</span></td><td><small>${fmtDt(r.fecha_resolucion)}</small></td></tr>`).join('')}</tbody></table></div>`
-      : '<div class="text-muted">Sin PSE.</div>';
+    if(rows.length){
+      h += `<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr>
+        <th>PSE</th><th>Cédula</th><th>Nombre</th><th class="text-end">Valor</th><th>Estado</th><th>Banco</th><th>Movimiento</th><th>Fecha</th>
+      </tr></thead><tbody>` + rows.map(r=>{
+        let movs=[]; try{movs=JSON.parse(r.movimientos||'[]');}catch(_){movs=[];}
+        const movHtml = movs.length ? movs.map(m=>{
+          let label;
+          if(m.tipo==='credito') label='Crédito ' + (m.referencia||'');
+          else if(m.tipo==='cobranza') label='Cobranza ' + (m.referencia||'');
+          else if(m.tipo==='producto') label=(m.descripcion || ('Producto #' + (m.producto_id||'')));
+          else label=(m.descripcion || m.tipo || 'Movimiento') + (m.referencia ? ' ' + m.referencia : '');
+          return `<div class="small">${esc(label)}: <strong>${money(m.valor)}</strong></div>`;
+        }).join('') : '<span class="small text-muted">Sin detalle</span>';
+        const ced = r.cedula_movimiento || r.referencia_2 || '—';
+        return `<tr>
+          <td><small>${esc(r.pse_id)}</small><div class="text-muted" style="font-size:.72rem">CUS ${esc(r.cus)}</div><div class="text-muted" style="font-size:.72rem">IP ${esc(r.referencia_1)}</div></td>
+          <td><small>${esc(ced)}</small></td>
+          <td><small>${esc(r.referencia_3||'—')}</small></td>
+          <td class="text-end">${money(r.valor)}</td>
+          <td><span class="badge text-bg-${r.estado==='Aprobada'?'success':'danger'}">${esc(r.estado)}</span></td>
+          <td><small>${esc(r.banco_originador||'—')}</small></td>
+          <td>${movHtml}</td>
+          <td><small>${fmtDt(r.fecha_resolucion)}</small></td>
+        </tr>`;
+      }).join('') + `</tbody></table></div>`;
+    } else {
+      h += '<div class="text-muted">Sin PSE.</div>';
+    }
     document.getElementById('pseDetalleContent').innerHTML=h;
     mPseDetalle.show();
   }catch(e){alert(e.message);}
