@@ -234,18 +234,18 @@ La preservación de la información histórica es un requisito obligatorio y tie
 
 > La **política** de migración es la de arriba (cero pérdida, trazabilidad, integridad de ids). Aquí el estado **ejecutado** por el migrador v1→v2 (one-use, trunca y re-inserta; fuente `multi_app_legacy`, destino `multi_app_v2`).
 
-## Bloques migrados (11) — las solicitudes NO se migran
+## Bloques migrados (10) — sin logs ni solicitudes
 
-> **Solicitudes (PQRS, tickets, etc.)**: NO se migran. En v2 se crean desde cero. El migrador trae datos base + **fábrica de créditos**.
+> **No se migran**: solicitudes (PQRS, tickets, etc.) **ni logs**. En v2 se crean desde cero. El migrador trae datos base + **fábrica de créditos**.
 
 | Bloque | Contenido | Cifras |
 |---|---|---|
 | 1 | `control_usuarios` → `usuarios` (ids preservados; incluye admin) | 12 |
-| 2–6 | `asociados_control` · `productos`/`cláusulas` → `productos` · asignaciones → `asociados_productos` · comisiones/redenciones → `movimientos_multi` · `control_logs` → `logs` | 660 · 8 · 1.062 · 18 · 32.472 |
-| 7 | pagos/transacciones (PSE/Confiar/conciliación/confirmación → `pagos_*`,`transacciones_*`) | pse 2.212 · confiar 3.820 · confirmación 1.623 · conciliación 1.812 · trx 3.398+10.379 |
-| 8 | `cobranza_*` → `cobranza_*` (estados y tipos normalizados a slug) | 2.857 com. · 2.806 mora · 4.358 mora-crédito · 3 indag. · 3 adj. · 122 remis. |
-| 9 | **Créditos (fábrica)**: `control_tasas_creditos` → `credito_lineas`; `credito_docs_solicitudes` → `credito_solicitudes`; **variables EAV** (`credito_campos_valores`); `credito_docs_documentos` → `credito_documentos` con archivo opaco | 25 líneas · 226 sol. · 1.484 variables · 2.057 docs |
-| 10 | Convenios + Boletería: `convenios`, `convenios_productos` (+12 productos-boleta por nombre), `boleteria_boletas`/`eventos` | 33 · 69+12 · 451 boletas · 1.384 eventos |
+| 2–6 | `asociados_control` · `productos`/`cláusulas` → `productos` · asignaciones → `asociados_productos` · comisiones/redenciones → `movimientos_multi` | 661 · 8 · 1.064 · 18 |
+| 7 | pagos/transacciones (PSE/Confiar/conciliación/confirmación → `pagos_*`,`transacciones_*`) | pse 2.254 · confiar 3.904 · confirmación 1.653 · conciliación 1.844 · trx 3.454+10.567 |
+| 8 | `cobranza_*` → `cobranza_*` (estados y tipos normalizados a slug) | 2.925 com. · 2.874 mora · 4.453 mora-crédito · 3 indag. · 3 adj. · 122 remis. |
+| 9 | **Créditos (fábrica)**: `control_tasas_creditos` → `credito_lineas`; `credito_docs_solicitudes` → `credito_solicitudes`; **variables EAV** (`credito_campos_valores`); `credito_docs_documentos` → `credito_documentos` con archivo opaco | 25 líneas · 235 sol. · 1.669 variables · 2.146 docs |
+| 10 | Convenios + Boletería: `convenios`, `convenios_productos` (+12 productos-boleta por nombre), `boleteria_boletas`/`eventos` | 33 · 69+12 · 451 boletas · 1.395 eventos |
 | 11 | **Tienda SOLO catálogo**: `tienda_categoria/marca/producto/clientes/promociones` | 24 · 29 · 598 · 44 · 15 |
 
 ## Créditos: mapeo de variables y archivos
@@ -272,28 +272,26 @@ DB_DST_HOST=... DB_DST_PORT=... DB_DST_NAME=multi_app_v2 \
 python sql/migrar_v1_a_v2.py --reset
 ```
 
-Bloques para `--only`: `usuarios, asociados, productos, asignaciones, movimientos, logs, pagos, cobranza, creditos, convenios, tienda`.
+Bloques para `--only`: `usuarios, asociados, productos, asignaciones, movimientos, pagos, cobranza, creditos, convenios, tienda`.
 
 ## Notas de estado
-- **Solicitudes**: el bloque histórico (`cx_solicitudes`, `ticketera_*`) **se retiró**: en v2 se crean desde cero.
+- **Solicitudes y logs**: los bloques históricos (`cx_solicitudes`, `ticketera_*` y `control_logs`) **se retiraron**: en v2 se crean desde cero.
 - **Créditos**: la re-ejecución preserva las solicitudes nuevas de v2 (`origen_id IS NULL`); solo borra/reinserta las migradas (`origen_tabla='credito_docs_solicitudes'`).
 - **Storage (R2)**: los archivos de `créditos`, `pagos`, `boletas`, `solicitudes`, `cobranza`, `fondo` se migran a Cloudflare R2 (`scripts/migrar_r2.php`, idempotente); `tienda`, `cargas`, `convenios` quedan **locales**.
 - **Integridad de ids**: `usuarios.id` y `productos.id` se preservan.
 
 ---
 
-## Validación local (Windows) — 11 bloques (sin solicitudes) ✅
+## Validación local — 10 bloques (sin logs ni solicitudes) ✅
 
 La migración completa se **ejecutó y validó en local** (Windows + MariaDB 11.8.9, misma versión que
-Hostinger) y login `admin` verificado. El detalle del entorno Windows (MariaDB en puerto 3307) está en el
-`README.md`.
+Hostinger) y login `admin` verificado.
 
-- **Re-ejecución de créditos** (2026-10-20): `--only=creditos --reset` → 226 solicitudes migradas,
-  **1.484 variables EAV** y **2.057 documentos** con ruta opaca; las solicitudes nuevas de v2
-  (`origen_id IS NULL`) se conservaron.
+- **Ejecución completa** (2026-10-25) con el dump legacy más reciente: 661 asociados · 235 solicitudes de
+  crédito · **1.669 variables EAV** · 2.146 documentos; `logs` y `solicitudes` quedan en **0**.
 - **Normalizaciones del migrador**: estados y tipos de cobranza a slug; `cedula_asociado` toma
   `numero_identificacion` cuando viene vacía; referencias a usuarios inexistentes se anulan a `NULL`
-  (`logs.id_usuario`, `pagos_confirmacion.rechazado_por`, `transacciones.usuario_id`).
+  (`pagos_confirmacion.rechazado_por`, `transacciones.usuario_id`).
 - **DDL**: `credito_lineas` se crea antes de `vw_creditos` (la vista lo referencia); sin eso, cargar
   `sql/ddl.sql` en una BD nueva fallaba.
 
@@ -308,6 +306,6 @@ movimientos 4.943 · datacredito 3.038 · estado_cuenta 250).
 
 Los **archivos físicos** del legacy (documentos de crédito, comprobantes, boletas, imágenes de convenios y
 fotos de tienda) **no están en el dump**: solo la base de datos. Deben **descargarse del servidor de Hostinger**
-y pasarse con `--files-src` en la migración de dev/test/prod (no en local). Conteos afectados: 2.057 docs de
+y pasarse con `--files-src` en la migración de dev/test/prod (no en local). Conteos afectados: 2.146 docs de
 crédito (en local solo había 5 físicos, sin match con el legado) · comprobantes de pago · boletas · fotos de
 tienda.
