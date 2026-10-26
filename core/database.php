@@ -33,5 +33,27 @@ function db(): PDO
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
 
+    // Alinear la collation de la conexion con la de las tablas.
+    // En hosting el default del servidor puede ser utf8mb4_general_ci mientras
+    // las tablas/vistas son utf8mb4_unicode_ci; los parametros de texto (LIKE ?)
+    // fallan con "Illegal mix of collations" (1267). Se toma la collation real
+    // de una tabla base (local: uca1400, dev: unicode_ci) y, si no existe, la
+    // collation por defecto de la base.
+    try {
+        $pdo->exec('SET NAMES ' . $charset);
+        $collation = $pdo->query(
+            "SELECT TABLE_COLLATION FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sifone_asociados' LIMIT 1"
+        )->fetchColumn();
+        if (!$collation) {
+            $collation = $pdo->query('SELECT @@collation_database')->fetchColumn();
+        }
+        if ($collation && preg_match('/^[A-Za-z0-9_]+$/', (string) $collation)) {
+            $pdo->exec('SET collation_connection = ' . $collation);
+        }
+    } catch (Throwable $e) {
+        error_log('[db] no se pudo ajustar collation_connection: ' . $e->getMessage());
+    }
+
     return $pdo;
 }
