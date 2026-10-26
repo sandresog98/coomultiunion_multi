@@ -73,7 +73,12 @@ final class SiliconFlowProvider implements ChatProvider
         if ($res['http'] !== 200 || !is_array($data)) {
             // Se registra el cuerpo del error SIN la API key (nunca viaja en el body).
             error_log('[chat-ai] HTTP ' . $res['http'] . ' ' . mb_substr((string) $res['body'], 0, 500));
-            throw new RuntimeException('El servicio de IA respondió con un error.');
+            // Incluir el código HTTP + fragmento del cuerpo permite diagnosticar
+            // (401 key, 404 modelo/URL, 403 proxy/red, 429 cuota, 5xx proveedor…).
+            $snippet = trim((string) preg_replace('/\s+/u', ' ', mb_substr((string) $res['body'], 0, 200)));
+            throw new RuntimeException(
+                'El servicio de IA respondió HTTP ' . $res['http'] . ($snippet !== '' ? ' — ' . $snippet : '') . '.'
+            );
         }
 
         $message   = $data['choices'][0]['message'] ?? [];
