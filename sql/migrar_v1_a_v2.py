@@ -253,10 +253,11 @@ def block_asignaciones(src, dst, args):
         clausula_map = {1: cl}
 
     rows = []
-    sc.execute("""SELECT id,cedula,producto_id,dia_pago,estado_activo,fecha_creacion,fecha_actualizacion
+    sc.execute("""SELECT id,cedula,producto_id,dia_pago,monto_pago,estado_activo,fecha_creacion,fecha_actualizacion
                   FROM control_asignacion_asociado_producto ORDER BY id""")
     for r in fetch_dicts(sc):
-        rows.append((r["id"], r["cedula"], r["producto_id"], 0, None,
+        # monto_pago es el valor mensual legacy; antes se insertaba 0 por error.
+        rows.append((r["id"], r["cedula"], r["producto_id"], r["monto_pago"], None,
                      r.get("dia_pago"), None, None,
                      r["estado_activo"], None, r["fecha_creacion"], r["fecha_actualizacion"]))
     n1 = insert_many(dc, "asociados_productos",
