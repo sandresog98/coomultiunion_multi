@@ -269,6 +269,7 @@ final class TransaccionService
                     LEFT JOIN ($asociados) sapx
                            ON sapx.cedula_norm = TRIM(LEADING '0' FROM CAST(psx.pse_cedula AS CHAR))
                     WHERE COALESCE(pco.estado, 'pendiente') <> 'no_valido'
+                      AND c.descripcion NOT LIKE 'Consigna Liq. Intereses%'
                       AND COALESCE(c.valor_consignacion, 0) - COALESCE(txc.usado, 0) > 0";
 
         $partes = [];
