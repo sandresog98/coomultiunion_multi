@@ -99,8 +99,16 @@ final class PagosService
             array_push($params, $like, $like, $like);
         }
         if ($estado !== '') {
-            $where[] = "COALESCE(pco.estado, 'pendiente') = ?";
-            $params[] = $estado;
+            if ($estado === 'pendiente') {
+                $where[] = "(COALESCE(pco.estado, 'pendiente') = 'pendiente' AND COALESCE(pse.pse_count, 0) = 0)";
+            } elseif ($estado === 'asignado') {
+                $where[] = "(pco.estado = 'asignado' OR (COALESCE(pse.pse_count, 0) > 0 AND COALESCE(tx.usado, 0) >= c.valor_consignacion))";
+            } elseif ($estado === 'no_valido') {
+                $where[] = "pco.estado = 'no_valido'";
+            } else {
+                $where[] = "COALESCE(pco.estado, 'pendiente') = ?";
+                $params[] = $estado;
+            }
         }
         if ($fechaDesde !== '') { $where[] = "DATE(c.fecha) >= ?"; $params[] = $fechaDesde; }
         if ($fechaHasta !== '') { $where[] = "DATE(c.fecha) <= ?"; $params[] = $fechaHasta; }
@@ -137,8 +145,22 @@ final class PagosService
 
         $from = "FROM pagos_confiar c
                  LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
-                 LEFT JOIN (SELECT confiar_id, SUM(valor_total) AS usado FROM transacciones GROUP BY confiar_id) tx ON tx.confiar_id = c.confiar_id
-                 LEFT JOIN (SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total
+                 LEFT JOIN (
+                     SELECT confiar_id, SUM(valor_total) AS usado
+                     FROM (
+                         SELECT t.id, c2.confiar_id, t.valor_total
+                         FROM transacciones t
+                         JOIN pagos_confiar c2 ON c2.confiar_id = t.confiar_id
+                         UNION
+                         SELECT t.id, pc2.confiar_id, t.valor_total
+                         FROM transacciones t
+                         JOIN pagos_conciliacion pc2 ON pc2.pse_id = t.pse_id
+                     ) u
+                     GROUP BY confiar_id
+                 ) tx ON tx.confiar_id = c.confiar_id
+                 LEFT JOIN (SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total,
+                                   COUNT(DISTINCT p.referencia_2) AS pse_cedulas_count,
+                                   MIN(p.referencia_2) AS pse_cedula
                             FROM pagos_conciliacion pc
                             JOIN pagos_pse p ON p.pse_id = pc.pse_id
                             GROUP BY pc.confiar_id) pse ON pse.confiar_id = c.confiar_id
@@ -154,7 +176,9 @@ final class PagosService
                     COALESCE(tx.usado, 0) AS usado,
                     c.valor_consignacion - COALESCE(tx.usado, 0) AS restante,
                     COALESCE(pse.pse_count, 0) AS pse_count,
-                    COALESCE(pse.pse_total, 0) AS pse_total
+                    COALESCE(pse.pse_total, 0) AS pse_total,
+                    COALESCE(pse.pse_cedulas_count, 0) AS pse_cedulas_count,
+                    pse.pse_cedula
              $from ORDER BY `$orderBy` $orderDir LIMIT ? OFFSET ?"
         );
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);
