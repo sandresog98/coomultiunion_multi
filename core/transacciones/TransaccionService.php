@@ -218,7 +218,8 @@ final class TransaccionService
                     0 AS pse_total,
                     0 AS pse_cedulas_count,
                     COALESCE(pcf.confiar_count, 0) AS confiar_count,
-                    pcf.confiar_ids AS confiar_ids
+                    pcf.confiar_ids AS confiar_ids,
+                    NULL AS pse_cedulas
                 FROM pagos_pse p
                 LEFT JOIN (
                     SELECT pse_id, SUM(valor_total) AS usado
@@ -264,14 +265,16 @@ final class TransaccionService
                         CAST(COALESCE(psx.pse_total, 0) AS DECIMAL(15,2)) AS pse_total,
                         COALESCE(psx.pse_cedulas_count, 0) AS pse_cedulas_count,
                         0 AS confiar_count,
-                        NULL AS confiar_ids
+                        NULL AS confiar_ids,
+                        psx.pse_cedulas
                     FROM pagos_confiar c
                     LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
                     LEFT JOIN ($usadoConfiar) txc ON txc.confiar_id = c.confiar_id
                     LEFT JOIN (
                         SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total,
                                COUNT(DISTINCT p.referencia_2) AS pse_cedulas_count,
-                               MIN(p.referencia_2) AS pse_cedula
+                               MIN(p.referencia_2) AS pse_cedula,
+                               GROUP_CONCAT(DISTINCT p.referencia_2 ORDER BY p.referencia_2 SEPARATOR ', ') AS pse_cedulas
                         FROM pagos_conciliacion pc
                         JOIN pagos_pse p ON p.pse_id = pc.pse_id
                         GROUP BY pc.confiar_id
