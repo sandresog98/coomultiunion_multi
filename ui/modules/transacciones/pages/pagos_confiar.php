@@ -18,6 +18,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
   <div class="card-body">
     <div class="row g-2 mb-3 align-items-end">
       <div class="col-auto" style="max-width:280px"><label class="form-label small text-muted mb-0">Buscar</label><div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input class="form-control" id="q" placeholder="CONF ID, cédula o descripción…"></div></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Descripción</label><select class="form-select" id="fDescripcion" data-searchable style="width:250px"><option value="Credito ACH" selected>Credito ACH</option><option value="Consignacion Pago QR">Consignacion Pago QR</option><option value="Consignacion en Cuenta Efectivo">Consignacion en Cuenta Efectivo</option><option value="Consignacion por Transf. Agencia Virtual">Consignacion por Transf. Agencia Virtual</option><option value="Cheque">Cheque</option><option value="">Todos</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" data-searchable style="width:140px"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="asignado">Asignado</option><option value="no_valido">No válido</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" data-searchable style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Cruce PSE</label><select class="form-select" id="fPse" data-searchable style="width:145px"><option value="">Todos</option><option value="con">Con PSE</option><option value="sin">Sin PSE</option></select></div>
@@ -76,7 +77,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>,alertBox=document.getElementById('alert');
-let state={q:'',estado:'',asignacion:'',pse:'',desde:'',hasta:'',page:0,size:20,order:'fecha',dir:'DESC'};
+let state={q:'',descripcion:'Credito ACH',estado:'',asignacion:'',pse:'',desde:'',hasta:'',page:0,size:20,order:'fecha',dir:'DESC'};
 let mConfirmar,mRechazar,mPseDetalle,debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -87,6 +88,7 @@ async function apicall(p,o){let r=await fetch(API+p,o),j=await r.json();if(!j.ok
 document.querySelectorAll('.sortable').forEach(th=>{th.addEventListener('click',()=>{let c=th.dataset.col;if(state.order===c)state.dir=state.dir==='ASC'?'DESC':'ASC';else{state.order=c;state.dir='ASC'}state.page=0;cargar();});});
 function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{let c=th.dataset.col,a=state.order===c;th.classList.toggle('active',a);let t=th.textContent.trim().replace(/[▲▼]/g,''),ar=a?(state.dir==='ASC'?'▲':'▼'):'';th.innerHTML=t+(ar?` <span class="sort-icon">${ar}</span>`:'');});}
 document.getElementById('q').addEventListener('input',()=>{clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>{state.q=document.getElementById('q').value.trim();state.page=0;cargar();},300);});
+document.getElementById('fDescripcion').addEventListener('change',function(){state.descripcion=this.value;state.page=0;cargar();});
 document.getElementById('fEstado').addEventListener('change',function(){state.estado=this.value;state.page=0;cargar();});
 document.getElementById('fAsignacion').addEventListener('change',function(){state.asignacion=this.value;state.page=0;cargar();});
 document.getElementById('fPse').addEventListener('change',function(){state.pse=this.value;state.page=0;cargar();});
@@ -94,7 +96,7 @@ document.getElementById('fPse').addEventListener('change',function(){state.pse=t
 
 async function cargar(){
   let o=state.page*state.size,bs='';
-  if(state.q)bs+='&q='+encodeURIComponent(state.q);if(state.estado)bs+='&estado='+state.estado;
+  if(state.q)bs+='&q='+encodeURIComponent(state.q);if(state.descripcion)bs+='&descripcion='+encodeURIComponent(state.descripcion);if(state.estado)bs+='&estado='+state.estado;
   if(state.asignacion)bs+='&asignacion='+state.asignacion;if(state.pse)bs+='&pse='+state.pse;if(state.desde)bs+='&fecha_desde='+state.desde;if(state.hasta)bs+='&fecha_hasta='+state.hasta;
   try{
     let d=await apicall(`pagos/listar?tipo=confiar&limit=${state.size}&offset=${o}&order=${state.order}&dir=${state.dir}${bs}`);

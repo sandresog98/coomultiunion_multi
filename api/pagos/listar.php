@@ -12,13 +12,14 @@ $fechaHasta = trim((string) ($_GET['fecha_hasta'] ?? ''));
 $asignacion = trim((string) ($_GET['asignacion'] ?? ''));
 $pse = trim((string) ($_GET['pse'] ?? ''));
 $confiarId = trim((string) ($_GET['confiar_id'] ?? ''));
+$descripcion = trim((string) ($_GET['descripcion'] ?? ''));
 $limit = min(200, max(1, (int) ($_GET['limit'] ?? 20)));
 $offset = max(0, (int) ($_GET['offset'] ?? 0));
 $orderBy = trim((string) ($_GET['order'] ?? ($tipo === 'confiar' ? 'fecha' : 'fecha_resolucion')));
 $orderDir = trim((string) ($_GET['dir'] ?? 'DESC'));
 
 if ($tipo === 'confiar') {
-    Http::ok($service->listarConfiar($q, $estado, $fechaDesde, $fechaHasta, $asignacion, $orderBy, $orderDir, $limit, $offset, $pse));
+    Http::ok($service->listarConfiar($q, $estado, $fechaDesde, $fechaHasta, $asignacion, $orderBy, $orderDir, $limit, $offset, $pse, $descripcion));
 } else {
     Http::ok($service->listarPse($q, $estado, $conciliado, $fechaDesde, $fechaHasta, $asignacion, $orderBy, $orderDir, $limit, $offset, $confiarId));
 }

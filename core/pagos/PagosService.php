@@ -86,7 +86,7 @@ final class PagosService
     }
 
     /** Lista pagos Confiar con filtros, ordenamiento y paginación. */
-    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $pse = ''): array
+    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $pse = '', string $descripcion = ''): array
     {
         if (!in_array($orderBy, self::CONF_ORDER_COLS, true)) { $orderBy = 'fecha'; }
         $orderDir = strtoupper($orderDir) === 'ASC' ? 'ASC' : 'DESC';
@@ -115,6 +115,23 @@ final class PagosService
             $where[] = "COALESCE(pse.pse_count, 0) > 0";
         } elseif ($pse === 'sin') {
             $where[] = "COALESCE(pse.pse_count, 0) = 0";
+        }
+        if ($descripcion !== '') {
+            $desc = trim($descripcion);
+            if ($desc === 'Credito ACH') {
+                $where[] = "c.descripcion = 'Credito ACH'";
+            } elseif ($desc === 'Consignacion Pago QR') {
+                $where[] = "(c.tipo_transaccion = 'Pago QR' OR c.descripcion LIKE 'Consignacion Pago QR%')";
+            } elseif ($desc === 'Consignacion en Cuenta Efectivo') {
+                $where[] = "(c.tipo_transaccion = 'Pago Efectivo' OR c.descripcion LIKE 'Consignacion en Cuenta Efectivo%')";
+            } elseif ($desc === 'Consignacion por Transf. Agencia Virtual') {
+                $where[] = "(c.tipo_transaccion = 'Transf. Agencia Virtual' OR c.descripcion LIKE 'Consignacion por Transf. Agencia Virtual%')";
+            } elseif ($desc === 'Cheque') {
+                $where[] = "(c.tipo_transaccion = 'Cheque' OR c.descripcion LIKE 'Consignacion en Cuenta Cheque%')";
+            } elseif ($desc !== 'Todos') {
+                $where[] = "c.descripcion = ?";
+                $params[] = $desc;
+            }
         }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
