@@ -110,9 +110,9 @@ final class PagosService
         $where = [];
         $params = [];
         if ($q !== '') {
-            $where[] = "(c.confiar_id LIKE ? OR c.descripcion LIKE ? OR pco.cedula LIKE ?)";
+            $where[] = "(c.confiar_id LIKE ? OR c.descripcion LIKE ? OR c.documento LIKE ? OR pco.cedula LIKE ?)";
             $like = '%' . $q . '%';
-            array_push($params, $like, $like, $like);
+            array_push($params, $like, $like, $like, $like);
         }
         if ($estado !== '') {
             if ($estado === 'pendiente') {
