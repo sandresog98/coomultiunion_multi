@@ -105,7 +105,7 @@ async function cargar(){
 function renderPagination(t){let N=Math.ceil(t/state.size);if(N<=1){document.getElementById('paginacion').innerHTML='';return;}let C=state.page,pages=[];if(N<=10){for(let i=0;i<N;i++)pages.push(i);}else{pages.push(0);if(C>3)pages.push('...');for(let i=Math.max(1,C-2);i<=Math.min(N-2,C+2);i++)pages.push(i);if(C<N-4)pages.push('...');pages.push(N-1);}let h=[];if(C>0)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C-1})">«</a></li>`);pages.forEach(p=>{if(p==='...')h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');else h.push(`<li class="page-item ${p===C?'active':''}"><a class="page-link" href="#" onclick="goPage(${p})">${p+1}</a></li>`);});if(C<N-1)h.push(`<li class="page-item"><a class="page-link" href="#" onclick="goPage(${C+1})">»</a></li>`);document.getElementById('paginacion').innerHTML=`<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;}
 function goPage(p){state.page=p;cargar();}
 
-function abrirConciliar(id){document.getElementById('cc_pse_id').value=id;document.getElementById('cc_confiar_id').value='';document.getElementById('cc_confiar_input').value='';document.getElementById('cc_confiar_res').innerHTML='';mConciliar.show();}
+function abrirConciliar(id){document.getElementById('cc_pse_id').value=id;document.getElementById('cc_confiar_id').value='';document.getElementById('cc_confiar_input').value='';document.getElementById('cc_confiar_res').innerHTML='';mConciliar.show();cargarConfiarDisponibles();}
 async function guardarConciliacion(e){e.preventDefault();let d={pse_id:document.getElementById('cc_pse_id').value,confiar_id:document.getElementById('cc_confiar_id').value.trim()};if(!d.confiar_id)return;try{await apicall('pagos/conciliacion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});mConciliar.hide();cargar();}catch(e){alert(e.message);}}
 function setupConfiarAuto(){
   const input=document.getElementById('cc_confiar_input'),hidden=document.getElementById('cc_confiar_id'),cont=document.getElementById('cc_confiar_res');
@@ -124,6 +124,30 @@ function setupConfiarAuto(){
     },300);
   });
   document.addEventListener('mousedown',e=>{if(!cont.contains(e.target)&&e.target!==input)cont.innerHTML='';});
+}
+function renderConfiarRows(rows, emptyMsg, title){
+  const cont=document.getElementById('cc_confiar_res');
+  if(!rows.length){cont.innerHTML='<div class="list-group-item text-muted">'+(emptyMsg||'Sin resultados')+'</div>';return;}
+  const head=title?`<div class="list-group-item bg-light small text-muted py-1">${esc(title)}</div>`:'';
+  cont.innerHTML=head+rows.map(r=>{
+    const rest=Number(r.restante||0);
+    const txt=(r.confiar_id||'')+' - '+(r.descripcion||'')+' - '+money(rest)+' disp.';
+    return `<button type="button" class="list-group-item list-group-item-action" data-id="${esc(r.confiar_id)}" data-txt="${esc(txt)}"><div class="d-flex justify-content-between gap-2"><span class="text-truncate"><strong>${esc(r.confiar_id)}</strong> <small class="text-muted">${esc(r.descripcion||'')}</small></span><span class="small text-nowrap">${money(rest)} disp.</span></div></button>`;
+  }).join('');
+  bindConfiarButtons();
+}
+function bindConfiarButtons(){
+  const input=document.getElementById('cc_confiar_input'),hidden=document.getElementById('cc_confiar_id'),cont=document.getElementById('cc_confiar_res');
+  cont.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('mousedown',e=>{e.preventDefault();hidden.value=b.dataset.id;input.value=b.dataset.txt||b.dataset.id;cont.innerHTML='';}));
+}
+async function cargarConfiarDisponibles(){
+  const cont=document.getElementById('cc_confiar_res');
+  cont.innerHTML='<div class="list-group-item text-muted">Cargando Credito ACH con saldo disponible...</div>';
+  try{
+    const d=await apicall('pagos/listar?tipo=confiar&descripcion=Credito ACH&disponible=1&limit=50&order=fecha&dir=DESC');
+    const rows=(d.rows||[]).filter(r=>Number(r.restante||0)>0 && (!r.confirmacion_estado||r.confirmacion_estado==='pendiente'));
+    renderConfiarRows(rows,'Sin Credito ACH con saldo disponible','Credito ACH con saldo disponible');
+  }catch(e){cont.innerHTML='<div class="list-group-item text-danger">Error al cargar</div>';}
 }
 async function desconciliar(p,c){if(!confirm('¿Desasignar conciliación?'))return;try{await apicall('pagos/conciliacion',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({pse_id:p,confiar_id:c})});cargar();}catch(e){alert(e.message);}}
 

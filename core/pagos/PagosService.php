@@ -102,7 +102,7 @@ final class PagosService
     }
 
     /** Lista pagos Confiar con filtros, ordenamiento y paginación. */
-    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $pse = '', string $descripcion = ''): array
+    public function listarConfiar(string $q = '', string $estado = '', string $fechaDesde = '', string $fechaHasta = '', string $asignacion = '', string $orderBy = 'fecha', string $orderDir = 'DESC', int $limit = 20, int $offset = 0, string $pse = '', string $descripcion = '', bool $disponible = false): array
     {
         if (!in_array($orderBy, self::CONF_ORDER_COLS, true)) { $orderBy = 'fecha'; }
         $orderDir = strtoupper($orderDir) === 'ASC' ? 'ASC' : 'DESC';
@@ -156,6 +156,9 @@ final class PagosService
                 $where[] = "c.descripcion = ?";
                 $params[] = $desc;
             }
+        }
+        if ($disponible) {
+            $where[] = "COALESCE(tx.usado, 0) < c.valor_consignacion - 10";
         }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
