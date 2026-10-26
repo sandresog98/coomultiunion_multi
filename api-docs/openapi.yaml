@@ -1044,18 +1044,18 @@ paths:
       operationId: postCreditosTransicion
       tags: [Créditos]
       summary: Cambiar de etapa (u otras acciones del expediente)
-      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.actualizar`, `creditos.gestionar_solicitud.acciones` · Módulo: `creditos` · Requiere `X-Idempotency-Key` · Multiplexor por `accion`: - `etapa` → `creditos.gestionar_solicitud.etapas` - `actualizar` → `creditos.gestionar_solicitud.actualizar` - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`"
+      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.datos_basicos`, `creditos.gestionar_solicitud.acciones` · Módulo: `creditos` · Requiere `X-Idempotency-Key` · Multiplexor por `accion`: - `etapa` → `creditos.gestionar_solicitud.etapas` - `actualizar` → `creditos.gestionar_solicitud.datos_basicos` - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`"
       x-actor: staff
       x-required-scopes:
         - creditos.gestionar_solicitud.etapas
-        - creditos.gestionar_solicitud.actualizar
+        - creditos.gestionar_solicitud.datos_basicos
         - creditos.gestionar_solicitud.acciones
       x-module-gate: creditos
       x-idempotent: true
       x-restrictions: |
         Multiplexor por `accion`:
         - `etapa` → `creditos.gestionar_solicitud.etapas`
-        - `actualizar` → `creditos.gestionar_solicitud.actualizar`
+        - `actualizar` → `creditos.gestionar_solicitud.datos_basicos`
         - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`
       requestBody:
         required: true

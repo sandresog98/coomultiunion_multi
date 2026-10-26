@@ -19,20 +19,40 @@ $sid = (int) ($_GET['id'] ?? 0);
   <div class="card-body" id="body"><div class="text-center text-muted py-4">Cargando…</div></div>
 </div>
 
-<!-- Modal editar datos básicos -->
-<div class="modal fade" id="mBasicos"><div class="modal-dialog"><div class="modal-content">
-  <div class="modal-header"><h6>Editar datos del solicitante</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+<!-- Modal editar datos de la solicitud -->
+<div class="modal fade" id="mBasicos"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h6>Editar datos de la solicitud</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
-    <div class="mb-2"><label class="form-label">Nombre <span class="text-danger">*</span></label><input class="form-control" id="bNombre"></div>
     <div class="row g-2">
-      <div class="col-6"><label class="form-label">Teléfono</label><input class="form-control" id="bTelefono"></div>
-      <div class="col-6"><label class="form-label">Correo</label><input class="form-control" id="bCorreo"></div>
-      <div class="col-6"><label class="form-label">Monto deseado</label><input type="number" class="form-control" id="bMonto" step="1000"></div>
-      <div class="col-6"><label class="form-label">Cuotas deseadas</label><input type="number" class="form-control" id="bCuotas"></div>
+      <div class="col-md-6"><label class="form-label">Nombre <span class="text-danger">*</span></label><input class="form-control" id="bNombre"></div>
+      <div class="col-md-6"><label class="form-label">Tipo de solicitante</label>
+        <select class="form-select" id="bTipoSolicitante">
+          <option value="estudiante">Estudiante</option>
+          <option value="empleado_descuento_nomina">Empleado con descuento de nómina</option>
+          <option value="empleado_sin_descuento">Empleado sin descuento</option>
+          <option value="independiente">Independiente</option>
+          <option value="pensionado_descuento_libranza">Pensionado con descuento de libranza</option>
+          <option value="pensionado_sin_descuento_libranza">Pensionado sin descuento de libranza</option>
+        </select>
+      </div>
+      <div class="col-md-6"><label class="form-label">Nº identificación</label><input class="form-control" id="bIdentificacion"></div>
+      <div class="col-md-6"><label class="form-label">Teléfono</label><input class="form-control" id="bTelefono"></div>
+      <div class="col-md-6"><label class="form-label">Correo</label><input class="form-control" id="bCorreo"></div>
+      <div class="col-md-6"><label class="form-label">Línea de crédito original</label><select class="form-select" id="bLinea"></select></div>
+      <div class="col-md-6"><label class="form-label">Monto deseado</label><input type="number" class="form-control" id="bMonto" step="1000" min="100000"></div>
+      <div class="col-md-6"><label class="form-label">Cuotas deseadas</label><input type="number" class="form-control" id="bCuotas" min="1" max="72"></div>
     </div>
-    <div class="d-flex align-items-center gap-3 mt-2">
-      <div class="form-check"><input class="form-check-input" type="checkbox" id="bCodeudor"><label class="form-check-label">¿Desea codeudor?</label></div>
-      <select class="form-select form-select-sm" id="bTipoCodeudor" style="width:auto"><option value="">— tipo codeudor —</option><option>codeudor_dependiente</option><option>codeudor_pensionado</option></select>
+    <div class="row g-2 mt-1 align-items-end">
+      <div class="col-md-6">
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="bCodeudor" onchange="toggleTipoCodeudor()"><label class="form-check-label" for="bCodeudor">¿Desea codeudor?</label></div>
+      </div>
+      <div class="col-md-6"><label class="form-label">Tipo de codeudor</label>
+        <select class="form-select" id="bTipoCodeudor">
+          <option value="no_necesita">No necesita</option>
+          <option value="codeudor_dependiente">Codeudor dependiente</option>
+          <option value="codeudor_pensionado">Codeudor pensionado</option>
+        </select>
+      </div>
     </div>
   </div>
   <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-brand" onclick="guardarBasicos()"><i class="fas fa-save me-1"></i>Guardar</button></div>
@@ -79,7 +99,7 @@ const SEC=<?php echo json_encode($sec, JSON_UNESCAPED_UNICODE); ?>;
 const SEC_DETALLE=SEC['creditos.gestionar_solicitud.detalle']===true;
 const SEC_ACEPT  =SEC['creditos.gestionar_solicitud.aceptaciones']===true;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
-const SEC_BASICOS=ACC['creditos.gestionar_solicitud.actualizar']===true;
+const SEC_BASICOS=ACC['creditos.gestionar_solicitud.datos_basicos']===true;
 const SEC_PLAN   =ACC['creditos.gestionar_solicitud.plan_pagos']===true;
 const SEC_ETAPAS =ACC['creditos.gestionar_solicitud.etapas']===true;
 const SEC_ADJ    =ACC['creditos.gestionar_solicitud.adjuntos']===true;
@@ -88,8 +108,12 @@ const SEC_ACC    =ACC['creditos.gestionar_solicitud.acciones']===true;
 const ESTETA={creacion:['Creación','primary'],revision:['Revisión','info'],estudio:['Estudio','warning'],consideracion:['Consideración','warning'],estudio_aprobado:['Aprobado','success'],estudio_rechazado:['Rechazado','danger'],radicado_tesoreria:['Radicado·Tesorería','dark'],final:['Final','dark']};
 const ORDT=['creacion','revision','estudio','consideracion','estudio_aprobado','radicado_tesoreria','estudio_rechazado','final'];
 const ESTADOS_CERRADOS=['cancelado','rechazado','desembolsado'];
+const TIPO_LABEL={estudiante:'Estudiante',empleado_descuento_nomina:'Empleado con descuento de nómina',empleado_sin_descuento:'Empleado sin descuento',independiente:'Independiente',pensionado_descuento_libranza:'Pensionado con descuento de libranza',pensionado_sin_descuento_libranza:'Pensionado sin descuento de libranza'};
+const TIPO_CODEUDOR_LABEL={no_necesita:'No necesita',codeudor_dependiente:'Codeudor dependiente',codeudor_pensionado:'Codeudor pensionado'};
 let S=null, mensaje=null;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function tipoLabel(v){return TIPO_LABEL[v]||String(v||'—').replace(/_/g,' ');}
+function tipoCodeudorLabel(v){return TIPO_CODEUDOR_LABEL[v]||String(v||'—').replace(/_/g,' ');}
 function money(v){return Number(v||0).toLocaleString('es-CO',{maximumFractionDigits:0});}
 async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
 function flag(m){if(m)alert(m);}
@@ -146,12 +170,28 @@ async function cargar(){
   const b=document.getElementById('body');
   let h=alertaEstado();
   h+=`<div class="d-flex flex-wrap gap-2 mb-3">`;
-  h+=`${S.origen==='ui'&&SEC_BASICOS&&!esCerrada()?`<button class="btn btn-outline-secondary btn-sm" onclick="abrirBasicos()"><i class="fas fa-user-edit me-1"></i>Datos básicos</button>`:''}
-    ${SEC_PLAN?`<button class="btn btn-outline-info btn-sm" onclick="abrirPlan()"><i class="fas fa-file-pdf me-1"></i>Plan de pagos</button>`:''}
+  h+=`${SEC_PLAN?`<button class="btn btn-outline-info btn-sm" onclick="abrirPlan()"><i class="fas fa-file-pdf me-1"></i>Plan de pagos</button>`:''}
     ${SEC_ACC&&!esCerrada()?`<button class="btn btn-outline-danger btn-sm" onclick="abrirRechazo()">Rechazar</button>
     <button class="btn btn-outline-secondary btn-sm" onclick="abrirCancelar()">Cancelar</button>`:''}
     <a class="btn btn-outline-secondary btn-sm ms-auto" href="${U}modules/cobranza/pages/cobranza?q=${encodeURIComponent(S.cedula_asociado||'')}"><i class="fas fa-phone"></i> Cobranza</a></div>`;
   h+=`${SEC_ETAPAS&&!esCerrada()?`<div id="controlEtapas" class="mb-3"></div>`:''}`;
+  h+=`<div class="card mb-3">
+    <div class="card-header brand d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-file-invoice-dollar me-1"></i>Datos de la solicitud</span>
+      ${S.origen==='ui'&&SEC_BASICOS&&!esCerrada()
+        ? `<button class="btn btn-light btn-sm" onclick="abrirBasicos()"><i class="fas fa-pen-to-square me-1"></i>Editar</button>`
+        : `<span class="badge text-bg-light">${esCerrada()?'Cerrada':'Solo lectura'}</span>`}
+    </div>
+    <div class="card-body"><div class="row g-2 small">
+      <div class="col-md-4"><b>Valor deseado:</b> ${S.monto_deseado!=null?'$'+money(S.monto_deseado):'—'}</div>
+      <div class="col-md-4"><b>Cuotas deseadas:</b> ${esc(S.numero_cuotas_deseadas??'—')}</div>
+      <div class="col-md-4"><b>Línea original:</b> ${esc(S.linea_solicitada_nombre||'—')}</div>
+      <div class="col-md-4"><b>Tipo de solicitante:</b> ${esc(tipoLabel(S.tipo_solicitante))}</div>
+      <div class="col-md-4"><b>Nº identificación:</b> ${esc(S.numero_identificacion||'—')}</div>
+      <div class="col-md-4"><b>¿Desea codeudor?:</b> ${S.desea_codeudor?'Sí':'No'}${S.desea_codeudor&&S.tipo_codeudor&&S.tipo_codeudor!=='no_necesita'?` <span class="text-muted">(${esc(tipoCodeudorLabel(S.tipo_codeudor))})</span>`:''}</div>
+      <div class="col-md-4"><b>Fecha creación:</b> ${esc(S.fecha_creacion||'—')}</div>
+    </div></div>
+  </div>`;
   h+=`<div id="infoSolicitante"></div>`;
   h+=`${SEC_ACEPT?`<div id="aceptacionResumen" class="mt-3"></div>`:''}`;
   h+=`<h6 class="mt-4 fw-semibold"><i class="fas fa-layer-group me-1"></i>Secciones del flujo</h6>`;
@@ -313,10 +353,52 @@ async function renderAceptaciones(){
     </div></div></div>`;
 }
 /* ===== acciones ===== */
-function abrirBasicos(){if(bloquearCerrada())return;document.getElementById('bNombre').value=S.nombre_solicitante||'';document.getElementById('bTelefono').value=S.numero_telefono||'';document.getElementById('bCorreo').value=S.correo_electronico||'';document.getElementById('bMonto').value=S.monto_deseado||'';document.getElementById('bCuotas').value=S.numero_cuotas_deseadas||'';document.getElementById('bCodeudor').checked=!!S.desea_codeudor;document.getElementById('bTipoCodeudor').value=S.tipo_codeudor||'';new bootstrap.Modal('#mBasicos').show();}
+function toggleTipoCodeudor(){
+  const chk=document.getElementById('bCodeudor'), sel=document.getElementById('bTipoCodeudor');
+  sel.disabled=!chk.checked;
+  if(!chk.checked) sel.value='no_necesita';
+}
+function abrirBasicos(){
+  if(bloquearCerrada())return;
+  document.getElementById('bNombre').value=S.nombre_solicitante||'';
+  document.getElementById('bTipoSolicitante').value=S.tipo_solicitante||'';
+  document.getElementById('bIdentificacion').value=S.numero_identificacion||'';
+  document.getElementById('bTelefono').value=S.numero_telefono||'';
+  document.getElementById('bCorreo').value=S.correo_electronico||'';
+  document.getElementById('bMonto').value=S.monto_deseado??'';
+  document.getElementById('bCuotas').value=S.numero_cuotas_deseadas??'';
+  const cur=parseInt(S.tasa_interes_id||0,10);
+  const lineas=S.lineas||[];
+  let opts=lineas.map(x=>`<option value="${x.id}">${esc(x.nombre_credito)}</option>`).join('');
+  if(cur>0 && !lineas.some(x=>parseInt(x.id,10)===cur)){
+    opts=`<option value="${cur}">${esc(S.linea_solicitada_nombre||('Línea #'+cur))}</option>`+opts;
+  }
+  document.getElementById('bLinea').innerHTML='<option value="">—</option>'+opts;
+  document.getElementById('bLinea').value=cur>0?String(cur):'';
+  document.getElementById('bCodeudor').checked=!!Number(S.desea_codeudor);
+  document.getElementById('bTipoCodeudor').value=S.tipo_codeudor||'no_necesita';
+  toggleTipoCodeudor();
+  new bootstrap.Modal('#mBasicos').show();
+}
 async function guardarBasicos(){
   if(bloquearCerrada())return;
-  const d={nombre_solicitante:document.getElementById('bNombre').value.trim(),numero_telefono:document.getElementById('bTelefono').value.trim(),correo_electronico:document.getElementById('bCorreo').value.trim(),monto_deseado:parseFloat(document.getElementById('bMonto').value)||0,numero_cuotas_deseadas:parseInt(document.getElementById('bCuotas').value)||0,desea_codeudor:document.getElementById('bCodeudor').checked,tipo_codeudor:document.getElementById('bTipoCodeudor').value};
+  const monto=parseFloat(document.getElementById('bMonto').value)||0;
+  const cuotas=parseInt(document.getElementById('bCuotas').value)||0;
+  if(monto<100000){flag('El monto deseado debe ser al menos $100.000.');return;}
+  if(cuotas<1){flag('Las cuotas deseadas deben ser al menos 1.');return;}
+  const desea=document.getElementById('bCodeudor').checked;
+  const d={
+    nombre_solicitante:document.getElementById('bNombre').value.trim(),
+    tipo_solicitante:document.getElementById('bTipoSolicitante').value,
+    numero_identificacion:document.getElementById('bIdentificacion').value.trim(),
+    numero_telefono:document.getElementById('bTelefono').value.trim(),
+    correo_electronico:document.getElementById('bCorreo').value.trim(),
+    monto_deseado:monto,
+    numero_cuotas_deseadas:cuotas,
+    tasa_interes_id:parseInt(document.getElementById('bLinea').value||'0',10)||0,
+    desea_codeudor:desea,
+    tipo_codeudor:desea?(document.getElementById('bTipoCodeudor').value||'no_necesita'):'no_necesita'
+  };
   try{await api('creditos/transicion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:SID,accion:'actualizar',...d})});bootstrap.Modal.getInstance(document.getElementById('mBasicos')).hide();cargar();}catch(e){flag(e.message);}
 }
 function abrirPlan(){document.getElementById('plAportes').value=65000;document.getElementById('plBolsillo').value=0;document.getElementById('plFondo').value=0;document.getElementById('plInicio').value=S.fecha_desembolso||'';document.getElementById('plPrimer').value='';new bootstrap.Modal('#mPlan').show();}
