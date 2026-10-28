@@ -47,7 +47,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
             <select class="form-select" id="txOrigen"><option value="confiar">Confiar</option><option value="pse">PSE</option></select>
           </div>
           <div class="col-md-6">
-            <label class="form-label">Recibo caja Sifone</label>
+            <label class="form-label">Recibo caja</label>
             <input class="form-control" id="txRecibo" placeholder="Nº recibo">
           </div>
         </div>

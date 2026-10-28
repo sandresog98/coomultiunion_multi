@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/_bootstrap.php';
 // GET /api/pagos/listar?tipo=pse|confiar&q=&estado=&conciliado=&fecha_desde=&fecha_hasta=&limit=&offset=&order=&dir=
+// Confiar acepta descripcion (string) o descripcion[] (multifiltro).
 Http::requireMethod('GET');
 $tipo = trim((string) ($_GET['tipo'] ?? 'pse'));
 $q = trim((string) ($_GET['q'] ?? ''));
@@ -12,7 +13,14 @@ $fechaHasta = trim((string) ($_GET['fecha_hasta'] ?? ''));
 $asignacion = trim((string) ($_GET['asignacion'] ?? ''));
 $pse = trim((string) ($_GET['pse'] ?? ''));
 $confiarId = trim((string) ($_GET['confiar_id'] ?? ''));
-$descripcion = trim((string) ($_GET['descripcion'] ?? ''));
+$descripcion = $_GET['descripcion'] ?? '';
+if (!is_array($descripcion)) {
+    $descripcion = [$descripcion];
+}
+$descripcion = array_values(array_filter(
+    array_map(static fn($d) => trim((string) $d), $descripcion),
+    static fn($d) => $d !== ''
+));
 $disponible = (($_GET['disponible'] ?? '') === '1');
 $limit = min(200, max(1, (int) ($_GET['limit'] ?? 20)));
 $offset = max(0, (int) ($_GET['offset'] ?? 0));

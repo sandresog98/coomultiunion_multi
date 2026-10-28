@@ -28,7 +28,27 @@ final class IndagacionService
         $st->bindValue(2, $limit, PDO::PARAM_INT);
         $st->execute();
         $rows = $st->fetchAll();
-        foreach ($rows as &$r) { $r['adjuntos'] = $this->adjuntos((int) $r['id']); }
+        if (!$rows) {
+            return [];
+        }
+
+        // Adjuntos en una sola consulta (evita N+1 por indagación).
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stAdj = $this->db->prepare(
+            "SELECT * FROM cobranza_indagaciones_adjuntos
+             WHERE indagacion_id IN ($in)
+             ORDER BY fecha_subida, id"
+        );
+        $stAdj->execute($ids);
+        $adjuntos = [];
+        foreach ($stAdj->fetchAll() as $a) {
+            $adjuntos[(int) $a['indagacion_id']][] = $a;
+        }
+        foreach ($rows as &$r) {
+            $r['adjuntos'] = $adjuntos[(int) $r['id']] ?? [];
+        }
+        unset($r);
         return $rows;
     }
 

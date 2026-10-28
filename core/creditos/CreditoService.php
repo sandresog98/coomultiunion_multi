@@ -434,17 +434,88 @@ final class CreditoService
         $d = $this->planDatos($solicitudId, $opts);
         $nombre = $s['nombre_solicitante'] ?? '';
         require_once dirname(__DIR__, 2) . '/utils/vendor/tcpdf/tcpdf.php';
-        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetMargins(8, 10, 8); $pdf->AddPage();
-        $pdf->SetFont('helvetica', 'B', 14); $pdf->Cell(0, 7, 'PLAN DE PAGOS — Solicitud #' . $s['numero_solicitud'], 0, 1, 'C');
-        $pdf->SetFont('helvetica', '', 9); $pdf->Ln(3);
-        $pdf->Cell(0, 5, 'Asociado: ' . $nombre . '  ·  Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
-        $pdf->Cell(0, 5, 'Monto: $' . number_format($d['plan']['total_capital'] ?? 0) . '  ·  Cuota fija: $' . number_format($d['cuota_fija'] ?? 0) . ' (+$65000 aportes)', 0, 1);
-        $pdf->Ln(2);
-        $pdf->SetFont('helvetica', 'B', 9); $pdf->Cell(14, 6, 'N°', 1, 0, 'C'); $pdf->Cell(24, 6, 'FECHA', 1, 0, 'C'); $pdf->Cell(30, 6, 'SALDO INICIAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'INTERÉS', 1, 0, 'R'); $pdf->Cell(28, 6, 'SEGURO', 1, 0, 'R'); $pdf->Cell(34, 6, 'ABONO CAPITAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'CUOTA', 1, 0, 'R'); $pdf->Cell(28, 6, 'APORTES', 1, 0, 'R'); $pdf->Cell(34, 6, 'CUOTA TOTAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'SALDO FINAL', 1, 1, 'R');
-        $pdf->SetFont('helvetica', '', 8); foreach (($d['plan']['tabla'] ?? []) as $c) {
-            $pdf->Cell(14, 5, $c['cuota'], 1, 0, 'C'); $pdf->Cell(24, 5, $c['fecha_pago'], 1, 0, 'C'); $pdf->Cell(30, 5, number_format($c['saldo_inicial']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['interes']), 1, 0, 'R'); $pdf->Cell(28, 5, number_format($c['seguro']), 1, 0, 'R'); $pdf->Cell(34, 5, number_format($c['abono_capital']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['cuota_fija']), 1, 0, 'R'); $pdf->Cell(28, 5, number_format($c['aportes']), 1, 0, 'R'); $pdf->Cell(34, 5, number_format($c['cuota_total']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['saldo_final']), 1, 1, 'R');
+        $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetMargins(6, 6, 6);
+        $pdf->SetAutoPageBreak(false, 0);
+        $pdf->AddPage();
+
+        // Encabezado institucional: logos de Multi y de la cooperativa.
+        $root = dirname(__DIR__, 2);
+        $logoMulti = $root . '/assets/img/logo.png';
+        $logoCoop  = $root . '/assets/img/logo_coomultiunion.png';
+        $logoMultiJpg = $root . '/assets/img/logo_pdf.jpg';
+        $logoCoopJpg  = $root . '/assets/img/logo_coomultiunion_pdf.jpg';
+        // TCPDF necesita GD o Imagick para PNG con canal alfa; si no hay,
+        // se usa una versión JPEG aplanada sobre blanco (sin alpha).
+        $puedeImagen = extension_loaded('gd') || extension_loaded('imagick');
+        if ($puedeImagen && is_file($logoMulti)) {
+            $pdf->Image($logoMulti, 6, 5, 14, 0, 'PNG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        } elseif (is_file($logoMultiJpg)) {
+            $pdf->Image($logoMultiJpg, 6, 5, 14, 0, 'JPG', '', 'T', true, 300, '', false, false, 0, false, false, false);
         }
+        if ($puedeImagen && is_file($logoCoop)) {
+            $pdf->Image($logoCoop, 180, 5, 24, 0, 'PNG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        } elseif (is_file($logoCoopJpg)) {
+            $pdf->Image($logoCoopJpg, 180, 5, 24, 0, 'JPG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        }
+
+        $pdf->SetY(7);
+        $pdf->SetFont('helvetica', 'B', 13);
+        $pdf->Cell(0, 6, 'PLAN DE PAGOS', 0, 1, 'C');
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->Cell(0, 4, 'Solicitud #' . $s['numero_solicitud'], 0, 1, 'C');
+
+        $pdf->SetY(18);
+        $pdf->SetFont('helvetica', '', 7.5);
+        $pdf->Cell(0, 4, 'Asociado: ' . $nombre, 0, 1);
+        $pdf->Cell(0, 4, 'Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
+        $pdf->Cell(0, 4, 'Monto: $' . number_format((float) ($d['plan']['total_capital'] ?? 0)) . '  ·  Cuota fija: $' . number_format((float) ($d['cuota_fija'] ?? 0)) . ' (+$65.000 aportes)', 0, 1);
+        $pdf->Cell(0, 4, 'Fecha de generación: ' . date('d/m/Y'), 0, 1);
+
+        // Tabla compacta: ancho útil 198 mm. El alto de fila se calcula para
+        // que todos los planes (hasta 72 cuotas) quepan en una sola página.
+        $tabla = $d['plan']['tabla'] ?? [];
+        $totalCuotas = count($tabla);
+        $rowH = min(4.2, max(2.5, 217 / max(1, $totalCuotas)));
+        $fontSize = $rowH >= 3.8 ? 6.2 : ($rowH >= 3.2 ? 5.9 : 5.4);
+
+        $pdf->SetY(34);
+        $pdf->SetFont('helvetica', 'B', 5.2);
+        $headers = ['N°', 'FECHA', 'SALDO INICIAL', 'INTERÉS', 'SEGURO', 'ABONO CAPITAL', 'CUOTA', 'APORTES', 'CUOTA TOTAL', 'SALDO FINAL'];
+        $widths = [9, 18, 23, 20, 17, 26, 21, 19, 23, 22];
+        foreach ($headers as $i => $h) {
+            $align = $i <= 1 ? 'C' : 'R';
+            $pdf->Cell($widths[$i], 5, $h, 1, 0, $align);
+        }
+        $pdf->Ln();
+
+        $pdf->SetFont('helvetica', '', $fontSize);
+        foreach ($tabla as $c) {
+            $pdf->Cell(9, $rowH, $c['cuota'], 1, 0, 'C');
+            $pdf->Cell(18, $rowH, $c['fecha_pago'], 1, 0, 'C');
+            $pdf->Cell(23, $rowH, number_format((float) $c['saldo_inicial']), 1, 0, 'R');
+            $pdf->Cell(20, $rowH, number_format((float) $c['interes']), 1, 0, 'R');
+            $pdf->Cell(17, $rowH, number_format((float) $c['seguro']), 1, 0, 'R');
+            $pdf->Cell(26, $rowH, number_format((float) $c['abono_capital']), 1, 0, 'R');
+            $pdf->Cell(21, $rowH, number_format((float) $c['cuota_fija']), 1, 0, 'R');
+            $pdf->Cell(19, $rowH, number_format((float) $c['aportes']), 1, 0, 'R');
+            $pdf->Cell(23, $rowH, number_format((float) $c['cuota_total']), 1, 0, 'R');
+            $pdf->Cell(22, $rowH, number_format((float) $c['saldo_final']), 1, 0, 'R');
+            $pdf->Ln();
+        }
+
+        // Firma del asociado, inmediatamente debajo de la última cuota.
+        $pdf->SetY($pdf->GetY() + 4);
+        $pdf->SetFont('helvetica', 'B', 8);
+        $pdf->Cell(60, 4, 'Firma del asociado', 0, 1);
+        $pdf->Ln(13);
+        $pdf->Cell(70, 1, '', 'T', 1);
+        $pdf->Ln(3);
+        $pdf->SetFont('helvetica', '', 7.5);
+        $pdf->Cell(0, 4, 'Nombre: ' . $nombre, 0, 1);
+        $pdf->Cell(0, 4, 'Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
+        $pdf->Cell(0, 4, 'Fecha: ' . date('d/m/Y'), 0, 1);
+
         if (ob_get_level()) ob_end_clean();
         $pdf->Output('plan_pagos_' . $s['numero_solicitud'] . '.pdf', 'D');
         exit;

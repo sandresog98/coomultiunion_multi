@@ -27,11 +27,32 @@ function db(): PDO
         $dsn  = "mysql:host=$host;port=$port;dbname=$name;charset=$charset";
     }
 
-    $pdo = new PDO($dsn, env('DB_USER', 'root'), env('DB_PASS', ''), [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ]);
+    $pdo = null;
+    $ultimoError = null;
+    // Reintentos con backoff exponencial acotado para absorber microcortes
+    // transitorios de la BD (p. ej. "connection refused" 2002/2003).
+    $intentos = 4;
+    for ($intento = 0; $intento < $intentos; $intento++) {
+        try {
+            $pdo = new PDO($dsn, env('DB_USER', 'root'), env('DB_PASS', ''), [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+                PDO::ATTR_TIMEOUT            => 5, // timeout de conexión (segundos)
+            ]);
+            break;
+        } catch (PDOException $e) {
+            $ultimoError = $e;
+            if ($intento < $intentos - 1) {
+                // 150 ms, 300 ms, 600 ms (backoff acotado + jitter).
+                $espera = 150000 * (2 ** $intento);
+                usleep($espera + random_int(0, 50000));
+            }
+        }
+    }
+    if (!$pdo instanceof PDO) {
+        throw $ultimoError ?? new PDOException('No se pudo conectar a la base de datos.');
+    }
 
     // Alinear la collation de la conexion con la de las tablas.
     // En hosting el default del servidor puede ser utf8mb4_general_ci mientras

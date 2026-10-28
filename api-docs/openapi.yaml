@@ -1413,6 +1413,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /cobranza/historial.php:
+    get:
+      operationId: getCobranzaHistorial
+      tags: [Cobranza]
+      summary: Historial unificado del asociado
+      description: "Devuelve {comunicaciones, indagaciones, compromisos} en una sola petición. — **Restricciones.** Scope: `cobranza.lista.comunicar`, `cobranza.lista.indagar`, `cobranza.lista.adjuntar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar, cobranza.lista.indagar, cobranza.lista.adjuntar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: cedula, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /cobranza/comunicaciones.php:
     get:
       operationId: getCobranzaComunicaciones

@@ -6,5 +6,6 @@ require __DIR__ . '/_bootstrap.php';
 Http::requireMethod('GET');
 Http::ok([
     'tipos'     => $service->tipos(),
+    'etiquetas' => $service->etiquetas(),
     'historial' => $service->historial(30),
 ]);

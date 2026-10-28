@@ -17,6 +17,19 @@ final class CargaService
     private const MAX_MB = 25;
     private const EXT_OK = ['xls', 'xlsx'];
 
+    /** Etiquetas visibles (la clave técnica no cambia en BD ni en la validación). */
+    private const ETIQUETAS = [
+        'sifone_libro'                   => 'Sifone libro / asociados',
+        'sifone_cartera_aseguradora'     => 'Sifone cartera aseguradora',
+        'sifone_cartera_mora'            => 'Sifone cartera mora',
+        'sifone_balance_prueba'          => 'Sifone balance de prueba',
+        'sifone_movimientos_tributarios' => 'Sifone movimientos contables',
+        'sifone_datacredito'             => 'Sifone datacrédito',
+        'estado_cuenta'                  => 'Sifone estado de cuenta',
+        'pagos_pse'                      => 'Pagos PSE',
+        'pagos_confiar'                  => 'Pagos Confiar',
+    ];
+
     public function __construct(private ?PDO $db = null)
     {
         $this->db = $db ?? db();
@@ -25,6 +38,16 @@ final class CargaService
     public function tipos(): array
     {
         return array_merge(SifoneImporter::tiposSoportados(), ['pagos_pse', 'pagos_confiar']);
+    }
+
+    /** Mapa clave técnica => etiqueta visible para la UI. */
+    public function etiquetas(): array
+    {
+        $out = [];
+        foreach ($this->tipos() as $tipo) {
+            $out[$tipo] = self::ETIQUETAS[$tipo] ?? $tipo;
+        }
+        return $out;
     }
 
     /** Ejecuta el importador correcto según el tipo y devuelve stats normalizadas. */

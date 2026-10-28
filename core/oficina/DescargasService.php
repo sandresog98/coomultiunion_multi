@@ -236,7 +236,7 @@ SQL;
             $data[] = [
                 $customerId,
                 $str($row['customerid_type']),
-                $str($row['optional1']),
+                ($row['optional1'] !== null && $row['optional1'] !== '' ? $str($row['optional1']) : '0'),
                 $str($row['payment_description1']),
                 $invoice,
                 $money($row['optional2']),
@@ -261,6 +261,79 @@ SQL;
             'sheet' => 'PSE',
             'widths' => [14, 30, 14, 22, 12, 14, 14, 14, 14, 14, 14, 14, 22, 14, 14, 14, 14, 14],
         ];
+    }
+
+    /**
+     * Genera el archivo PSE con el MISMO formato del legacy v1:
+     * .xls BIFF, columnas de dinero como texto con 2 decimales y coma,
+     * invoice_id entero y textos en Windows-1252.
+     *
+     * No usa ExcelGenerator porque éste escribe .xlsx y trunca los decimales.
+     */
+    public function exportarPseXls(int $start): void
+    {
+        $rep  = $this->exportarPse($start);
+        $rows = $rep['data'];
+
+        if (ob_get_length()) {
+            @ob_end_clean();
+        }
+        header('Content-Type: application/vnd.ms-excel');
+        header('Content-Disposition: attachment; filename="pse.xls"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+
+        $encode = static function ($text): string {
+            $s = (string) $text;
+            if (function_exists('mb_convert_encoding')) {
+                $out = @mb_convert_encoding($s, 'Windows-1252', 'UTF-8');
+                if ($out !== false) {
+                    return $out;
+                }
+            }
+            if (function_exists('iconv')) {
+                $out = @iconv('UTF-8', 'Windows-1252//TRANSLIT', $s);
+                if ($out !== false) {
+                    return $out;
+                }
+            }
+            return $s;
+        };
+
+        $xlsBOF = static function (): void {
+            echo pack('vvvvvv', 0x0809, 0x0008, 0x0000, 0x0010, 0x0000, 0x0000);
+        };
+        $xlsEOF = static function (): void {
+            echo pack('vv', 0x000A, 0x0000);
+        };
+        $xlsLabel = static function (int $row, int $col, $text) use ($encode): void {
+            $str = $encode($text);
+            $len = strlen($str);
+            echo pack('vvvvv', 0x0204, 8 + $len, $row, $col, 0x0000) . pack('v', $len) . $str;
+        };
+
+        $xlsBOF();
+        $moneyCols = [5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17];
+        $totalRows = count($rows);
+        for ($r = 0; $r < $totalRows; $r++) {
+            $row = $rows[$r];
+            $cols = count($row);
+            for ($c = 0; $c < $cols; $c++) {
+                $val = $row[$c];
+                if ($r === 0) {
+                    $xlsLabel($r, $c, $val);
+                } elseif (in_array($c, $moneyCols, true)) {
+                    $xlsLabel($r, $c, number_format((float) $val, 2, ',', ''));
+                } elseif ($c === 4) {
+                    $xlsLabel($r, $c, (string) (int) $val);
+                } else {
+                    $xlsLabel($r, $c, (string) $val);
+                }
+            }
+        }
+        $xlsEOF();
+        exit;
     }
 
     /** Asociados en mora (crédito + aportes) con codeudor y desglose de productos. */

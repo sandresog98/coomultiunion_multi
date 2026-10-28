@@ -25,7 +25,15 @@ final class ComunicacionService
     public function historialCompromisos(string $cedula, int $limit = 100): array
     {
         $st = $this->db->prepare(
-            "SELECT c.*, u.nombre_completo AS usuario_nombre
+            "SELECT c.*, u.nombre_completo AS usuario_nombre,
+                    COALESCE((
+                        SELECT SUM(t.valor_total)
+                        FROM transacciones t
+                        WHERE t.cedula = c.asociado_cedula
+                          AND t.fecha_creacion >= c.fecha
+                          AND (c.fecha_compromiso IS NULL
+                               OR t.fecha_creacion <= CONCAT(c.fecha_compromiso, ' 23:59:59'))
+                    ), 0) AS suma_pagado
              FROM cobranza_comunicaciones c
              LEFT JOIN usuarios u ON u.id = c.creado_por
              WHERE c.asociado_cedula = ? AND (c.fecha_compromiso IS NOT NULL OR (c.monto_compromiso IS NOT NULL AND c.monto_compromiso > 0))
@@ -37,7 +45,7 @@ final class ComunicacionService
         $rows = $st->fetchAll();
         $hoy = date('Y-m-d');
         foreach ($rows as &$r) {
-            $suma = $this->sumaPagosRango($cedula, $r['fecha'], $r['fecha_compromiso']);
+            $suma = (float) ($r['suma_pagado'] ?? 0);
             $monto = (float) $r['monto_compromiso'];
             if ($r['fecha_compromiso']) {
                 if ($hoy <= $r['fecha_compromiso']) $r['estado_compromiso'] = $suma >= $monto ? 'cumplido' : 'pendiente_tiempo';
@@ -48,16 +56,6 @@ final class ComunicacionService
             $r['suma_pagado'] = $suma;
         }
         return $rows;
-    }
-
-    private function sumaPagosRango(string $cedula, string $desde, ?string $hasta): float
-    {
-        $sql = "SELECT COALESCE(SUM(valor_total),0) FROM transacciones WHERE cedula = ? AND fecha_creacion >= ?";
-        $params = [$cedula, $desde];
-        if ($hasta) { $sql .= " AND fecha_creacion <= CONCAT(?, ' 23:59:59')"; $params[] = $hasta; }
-        $st = $this->db->prepare($sql);
-        $st->execute($params);
-        return (float) ($st->fetchColumn() ?? 0);
     }
 
     public function listarPorCedula(string $cedula, int $limit = 50): array

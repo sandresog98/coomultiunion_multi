@@ -15,33 +15,60 @@ final class TransaccionService
         $this->db = $db ?? db();
     }
 
-    /** Lista transacciones de un asociado con paginación. */
-    public function listar(string $cedula, int $limit = 20, int $offset = 0): array
+    /** Lista transacciones de un asociado con paginación y filtros opcionales. */
+    public function listar(string $cedula, int $limit = 20, int $offset = 0, string $origen = '', string $fechaDesde = '', string $fechaHasta = ''): array
     {
-        $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones WHERE cedula = ?");
-        $st->execute([$cedula]);
+        $where = ['cedula = ?'];
+        $params = [$cedula];
+        if ($origen !== '' && in_array($origen, ['pse', 'confiar', 'boleta'], true)) {
+            $where[] = 'origen = ?';
+            $params[] = $origen;
+        }
+        if ($fechaDesde !== '') { $where[] = 'fecha_creacion >= ?'; $params[] = strlen($fechaDesde) === 10 ? $fechaDesde . ' 00:00:00' : $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = 'fecha_creacion <= ?'; $params[] = strlen($fechaHasta) === 10 ? $fechaHasta . ' 23:59:59' : $fechaHasta; }
+        $w = implode(' AND ', $where);
+
+        $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones WHERE $w");
+        $st->execute($params);
         $total = (int) $st->fetchColumn();
 
         $st = $this->db->prepare(
-            "SELECT * FROM transacciones WHERE cedula = ? ORDER BY fecha_creacion DESC LIMIT ? OFFSET ?"
+            "SELECT * FROM transacciones WHERE $w ORDER BY fecha_creacion DESC LIMIT ? OFFSET ?"
         );
-        $st->bindValue(1, $cedula);
-        $st->bindValue(2, $limit, PDO::PARAM_INT);
-        $st->bindValue(3, $offset, PDO::PARAM_INT);
+        foreach ($params as $i => $v) { $st->bindValue($i + 1, $v); }
+        $st->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+        $st->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
         $st->execute();
         $rows = $st->fetchAll();
 
-        // Adjuntar detalles a cada transacción
-        foreach ($rows as &$tx) {
-            $stD = $this->db->prepare(
-                "SELECT d.*, p.nombre AS producto_nombre
-                 FROM transacciones_detalle d
-                 LEFT JOIN productos p ON p.id = d.producto_id
-                 WHERE d.transaccion_id = ? ORDER BY d.id"
-            );
-            $stD->execute([$tx['id']]);
-            $tx['detalles'] = $stD->fetchAll();
+        if (!$rows) {
+            return ['rows' => [], 'total' => $total, 'limit' => $limit, 'offset' => $offset];
         }
+
+        // Detalles en una sola consulta (evita N+1 por transacción).
+        $ids = array_map(static fn(array $tx): int => (int) $tx['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stD = $this->db->prepare(
+            "SELECT d.*, p.nombre AS producto_nombre
+             FROM transacciones_detalle d
+             LEFT JOIN productos p ON p.id = d.producto_id
+             WHERE d.transaccion_id IN ($in)
+             ORDER BY d.id"
+        );
+        $stD->execute($ids);
+        $detalles = [];
+        foreach ($stD->fetchAll() as $det) {
+            $detalles[(int) $det['transaccion_id']][] = $det;
+        }
+
+        foreach ($rows as &$tx) {
+            $tx['detalles'] = $detalles[(int) $tx['id']] ?? [];
+            $tx['valor_asignado'] = 0.0;
+            foreach ($tx['detalles'] as $det) {
+                $tx['valor_asignado'] += (float) ($det['valor_asignado'] ?? 0);
+            }
+        }
+        unset($tx);
 
         return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
     }
@@ -322,7 +349,7 @@ final class TransaccionService
     }
 
     /** Lista todas las transacciones con filtros y paginación. */
-    public function listarTodas(string $q = '', string $origen = '', string $fechaDesde = '', string $fechaHasta = '', int $limit = 20, int $offset = 0): array
+    public function listarTodas(string $q = '', string $origen = '', string $fechaDesde = '', string $fechaHasta = '', int $limit = 20, int $offset = 0, ?float $valorMin = null, ?float $valorMax = null, string $recibo = ''): array
     {
         $where = [];
         $params = [];
@@ -337,6 +364,12 @@ final class TransaccionService
         }
         if ($fechaDesde !== '') { $where[] = "DATE(t.fecha_creacion) >= ?"; $params[] = $fechaDesde; }
         if ($fechaHasta !== '') { $where[] = "DATE(t.fecha_creacion) <= ?"; $params[] = $fechaHasta; }
+        if ($valorMin !== null) { $where[] = "t.valor_total >= ?"; $params[] = $valorMin; }
+        if ($valorMax !== null) { $where[] = "t.valor_total <= ?"; $params[] = $valorMax; }
+        if ($recibo !== '') {
+            $where[] = "t.recibo_caja LIKE ?";
+            $params[] = '%' . $recibo . '%';
+        }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones t LEFT JOIN sifone_asociados sa ON sa.cedula = t.cedula $w");
@@ -366,7 +399,12 @@ final class TransaccionService
             );
             $stD->execute([$tx['id']]);
             $tx['detalles'] = $stD->fetchAll();
+            $tx['valor_asignado'] = 0.0;
+            foreach ($tx['detalles'] as $det) {
+                $tx['valor_asignado'] += (float) ($det['valor_asignado'] ?? 0);
+            }
         }
+        unset($tx);
         return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
     }
 
