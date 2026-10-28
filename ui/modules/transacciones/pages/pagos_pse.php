@@ -24,7 +24,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <input class="form-control" id="q" placeholder="PSE ID, cédula o nombre…">
         </div>
       </div>
-      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" data-searchable style="width:140px"><option value="">Todos</option><option value="Aprobada">Aprobada</option><option value="Rechazada">Rechazada</option></select></div>
+      <div class="col-auto"><label class="form-label small text-muted mb-0">Estado</label><select class="form-select" id="fEstado" data-searchable style="width:140px"><option value="">Todos</option><option value="Aprobada" selected>Aprobada</option><option value="Rechazada">Rechazada</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Conciliado</label><select class="form-select" id="fConciliado" data-searchable style="width:145px"><option value="">Todos</option><option value="1">Conciliados</option><option value="0">Sin conciliar</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Asignación</label><select class="form-select" id="fAsignacion" data-searchable style="width:135px"><option value="">Todos</option><option value="0">Sin asignar</option><option value="parcial">Parcial</option><option value="completo">Completo</option></select></div>
       <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label><input type="date" class="form-control" id="fDesde" style="width:140px"></div>
@@ -80,7 +80,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>,alertBox=document.getElementById('alert');
-let state={q:'',estado:'',conciliado:'',asignacion:'',desde:'',hasta:'',page:0,size:20,order:'fecha_resolucion',dir:'DESC'};
+let state={q:'',estado:'Aprobada',conciliado:'',asignacion:'',desde:'',hasta:'',page:0,size:20,order:'fecha_resolucion',dir:'DESC'};
 let mConciliar,mConfiarDetalle,debounceTimer;
 let confiarData={};
 

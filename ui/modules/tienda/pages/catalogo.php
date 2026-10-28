@@ -6,6 +6,7 @@ $acc = ui_acciones('tienda.catalogo', $staff['rol'] ?? '');
 $canCrear = ui_accion('tienda.catalogo', 'crear',    $staff['rol'] ?? '');
 $canEdit  = ui_accion('tienda.catalogo', 'editar',   $staff['rol'] ?? '');
 $canElim  = ui_accion('tienda.catalogo', 'eliminar', $staff['rol'] ?? '');
+$canCarga = ui_accion('tienda.catalogo', 'carga',    $staff['rol'] ?? '');
 $pageTitle = 'Catálogo';
 $currentPage = 'tienda_catalogo';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';
@@ -28,6 +29,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <span id="fSizeP"></span>
           <?php if ($canCrear): ?>
           <button class="btn btn-light btn-sm" onclick="abrirProducto()"><i class="fas fa-plus me-1"></i>Nuevo producto</button>
+          <?php endif; ?>
+          <?php if ($canCarga): ?>
+          <a class="btn btn-light btn-sm" href="<?php echo uiBaseUrl(); ?>modules/tienda/pages/catalogo_carga"><i class="fas fa-file-import me-1"></i>Carga masiva</a>
           <?php endif; ?>
         </span>
       </div>

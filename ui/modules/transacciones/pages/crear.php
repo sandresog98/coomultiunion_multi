@@ -254,10 +254,10 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           </div>
 
           <div class="form-section">
-            <div class="form-section-title">Valor</div>
+            <div class="form-section-title">Valor asignado</div>
             <div class="row g-2 align-items-end">
               <div class="col-md-6">
-                <label class="form-label small fw-semibold">Valor total <span class="text-danger">*</span></label>
+                <label class="form-label small fw-semibold">Valor asignado <span class="text-danger">*</span></label>
                 <input type="text" inputmode="numeric" pattern="[0-9.]*" autocomplete="off" class="form-control form-control-sm fw-bold" id="txValorTotal" placeholder="0" readonly>
               </div>
               <div class="col-md-6">

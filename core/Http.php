@@ -33,11 +33,17 @@ final class Http
         }
     }
 
-    /** @param mixed $data */
-    public static function json($data, int $status = 200): void
+    /**
+     * @param mixed $data
+     * @param array<string,string> $headers
+     */
+    public static function json($data, int $status = 200, array $headers = []): void
     {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');
+        foreach ($headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -47,9 +53,40 @@ final class Http
         self::json(['ok' => true, 'data' => $data], $status);
     }
 
-    public static function fail(string $error, int $status = 400): void
+    /** @param array<string,string> $headers */
+    public static function fail(string $error, int $status = 400, array $headers = []): void
     {
-        self::json(['ok' => false, 'error' => $error], $status);
+        self::json(['ok' => false, 'error' => $error], $status, $headers);
+    }
+
+    /**
+     * 503 de disponibilidad transitoria con Retry-After: el cliente (o el
+     * navegador) reintenta con backoff en lugar de rendirse de inmediato.
+     */
+    public static function failRetry(string $error, int $status = 503, int $retryAfter = 2): void
+    {
+        self::fail($error, $status, ['Retry-After' => (string) max(1, $retryAfter)]);
+    }
+
+    /**
+     * ¿El error es una caída de conexión a la base de datos?
+     * Permite responder 503 en lugar de un 500 genérico.
+     */
+    public static function isDbUnavailable(Throwable $e): bool
+    {
+        if (!$e instanceof PDOException) {
+            return false;
+        }
+        $msg = $e->getMessage();
+        return str_contains($msg, '2002')
+            || str_contains($msg, '2003')
+            || str_contains($msg, '2006')
+            || str_contains($msg, '2013')
+            || stripos($msg, 'connection refused') !== false
+            || stripos($msg, 'No se puede establecer') !== false
+            || stripos($msg, 'Connection timed out') !== false
+            || stripos($msg, 'gone away') !== false
+            || stripos($msg, 'Lost connection') !== false;
     }
 
     /**
