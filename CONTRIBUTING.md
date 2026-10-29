@@ -15,6 +15,9 @@ rama/*  ──PR──▶  develop  ──PR──▶  master
 - `master` solo puede recibir cambios desde `develop` mediante un PR aprobado.
 - Si un PR aparece con base `master` y no viene de `develop`, debe cerrarse y recrearse contra `develop`.
 
+> Procedimiento detallado, workflows, configuración de rulesets y resolución de problemas:
+> [`docs/flujo_ramas_y_sincronizacion.md`](docs/flujo_ramas_y_sincronizacion.md).
+
 ## Ramas
 
 | Rama | Uso | Protección |
