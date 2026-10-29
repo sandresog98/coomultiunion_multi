@@ -9,7 +9,7 @@ $id = (int) ($in['id'] ?? 0); if ($id <= 0) Http::fail('Falta el id.');
 $accion = trim((string) ($in['accion'] ?? ''));
 Http::crud('creditos.gestionar_solicitud', [
     'etapa'      => 'etapas',
-    'actualizar' => 'actualizar',
+    'actualizar' => 'datos_basicos',
     'cancelar'   => 'acciones',
     'rechazar'   => 'acciones',
     'aprobar'    => 'acciones',

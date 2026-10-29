@@ -161,8 +161,11 @@ final class PortalService
         $where = 't.cedula = ?';
         $params = [$cedula];
         if ($mes !== '' && preg_match('/^\d{4}-\d{2}$/', $mes)) {
-            $where .= " AND DATE_FORMAT(t.fecha_creacion, '%Y-%m') = ?";
-            $params[] = $mes;
+            $inicio = $mes . '-01 00:00:00';
+            $fin = date('Y-m-d H:i:s', strtotime($mes . '-01 +1 month'));
+            $where .= ' AND t.fecha_creacion >= ? AND t.fecha_creacion < ?';
+            $params[] = $inicio;
+            $params[] = $fin;
         }
         $st = $this->db->prepare(
             "SELECT t.id, t.origen, t.pse_id, t.confiar_id, t.recibo_caja, t.valor_total,
@@ -177,9 +180,26 @@ final class PortalService
         );
         $st->execute($params);
         $rows = $st->fetchAll();
-        foreach ($rows as &$r) {
-            $r['detalles'] = $this->movimientoDetalles((int) $r['id']);
+        if (!$rows) {
+            return [];
         }
+
+        // Detalles en una sola consulta (evita N+1 por transacción).
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stD = $this->db->prepare(
+            "SELECT id, transaccion_id, tipo_rubro, referencia_credito, producto_id, descripcion, valor_asignado
+             FROM transacciones_detalle WHERE transaccion_id IN ($in) ORDER BY id"
+        );
+        $stD->execute($ids);
+        $detalles = [];
+        foreach ($stD->fetchAll() as $d) {
+            $detalles[(int) $d['transaccion_id']][] = $d;
+        }
+        foreach ($rows as &$r) {
+            $r['detalles'] = $detalles[(int) $r['id']] ?? [];
+        }
+        unset($r);
         return $rows;
     }
 
@@ -205,8 +225,8 @@ final class PortalService
             "SELECT vc.*, dc.estado_credito
              FROM vw_creditos vc
              LEFT JOIN sifone_datacredito dc
-                ON CAST(dc.cedula AS UNSIGNED) = CAST(vc.cedula AS UNSIGNED)
-               AND CAST(dc.numero_credito AS UNSIGNED) = CAST(vc.numero_credito AS UNSIGNED)
+                ON dc.cedula_num = CAST(vc.cedula AS UNSIGNED)
+               AND dc.numero_num = CAST(vc.numero_credito AS UNSIGNED)
                AND dc.codeudor = 0
              WHERE vc.cedula = ?"
         );
@@ -250,8 +270,8 @@ final class PortalService
             "SELECT vc.*, dc.estado_credito
              FROM vw_creditos vc
              LEFT JOIN sifone_datacredito dc
-                ON CAST(dc.cedula AS UNSIGNED) = CAST(vc.cedula AS UNSIGNED)
-               AND CAST(dc.numero_credito AS UNSIGNED) = CAST(vc.numero_credito AS UNSIGNED)
+                ON dc.cedula_num = CAST(vc.cedula AS UNSIGNED)
+               AND dc.numero_num = CAST(vc.numero_credito AS UNSIGNED)
                AND dc.codeudor = 0
              WHERE vc.cedula = ? AND vc.numero_credito = ?"
         );
@@ -451,23 +471,40 @@ final class PortalService
              WHERE c.activo = 1
              ORDER BY c.nombre"
         );
-        $out = [];
-        foreach ($st->fetchAll() as $c) {
-            $sp = $pdo->prepare(
-                "SELECT p.id, p.nombre, p.precio_venta, p.precio_compra,
-                        (SELECT COUNT(*) FROM boleteria_boletas b
-                         WHERE b.producto_id = p.id AND b.estado = 'disponible') AS disponibles
-                 FROM convenios_productos p
-                 WHERE p.convenio_id = ? AND p.maneja_stock = 1 AND p.activo = 1
-                 ORDER BY p.nombre"
-            );
-            $sp->execute([(int) $c['id']]);
-            $productos = array_map(static fn($r) => [
-                'id' => $r['id'],
+        $convenios = $st->fetchAll();
+        if (!$convenios) {
+            return [];
+        }
+
+        $ids = array_map(static fn(array $c): int => (int) $c['id'], $convenios);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $st = $pdo->prepare(
+            "SELECT p.convenio_id, p.id, p.nombre, p.precio_venta, p.precio_compra,
+                    COALESCE(b.disponibles, 0) AS disponibles
+             FROM convenios_productos p
+             LEFT JOIN (
+                 SELECT producto_id, COUNT(*) AS disponibles
+                 FROM boleteria_boletas
+                 WHERE estado = 'disponible'
+                 GROUP BY producto_id
+             ) b ON b.producto_id = p.id
+             WHERE p.maneja_stock = 1 AND p.activo = 1 AND p.convenio_id IN ($in)
+             ORDER BY p.convenio_id, p.nombre"
+        );
+        $st->execute($ids);
+        $porConvenio = [];
+        foreach ($st->fetchAll() as $r) {
+            $porConvenio[(int) $r['convenio_id']][] = [
+                'id' => (int) $r['id'],
                 'nombre' => $r['nombre'],
                 'precio_venta' => (float) ($r['precio_venta'] ?? 0),
                 'disponibles' => (int) $r['disponibles'],
-            ], $sp->fetchAll());
+            ];
+        }
+
+        $out = [];
+        foreach ($convenios as $c) {
+            $productos = $porConvenio[(int) $c['id']] ?? [];
             if ($productos) {
                 $out[] = [
                     'id' => (int) $c['id'],

@@ -57,13 +57,15 @@ function showAlert(m, ok=false){ alertBox.className='alert alert-'+(ok?'success'
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function badge(e){ const m={completado:'success',error:'danger',procesando:'warning',pendiente:'secondary'}; return `<span class="badge text-bg-${m[e]||'secondary'}">${esc(e)}</span>`; }
 
+let tipoLabels = {};
 async function cargar(){
   const r = await fetch(API+'cargas/listar'); const j = await r.json();
   if(!j.ok){ showAlert(j.error); return; }
+  tipoLabels = j.data.etiquetas || {};
   const sel=document.getElementById('tipo');
-  if(sel.options.length<=1){ j.data.tipos.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); }); }
+  if(sel.options.length<=1){ j.data.tipos.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=tipoLabels[t]||t; sel.appendChild(o); }); }
   document.getElementById('tbody').innerHTML = j.data.historial.map(h=>`
-    <tr><td>${esc(h.fecha_creacion)}</td><td><code>${esc(h.tipo)}</code></td><td>${badge(h.estado)}</td>
+    <tr><td>${esc(h.fecha_creacion)}</td><td><code>${esc(tipoLabels[h.tipo]||h.tipo)}</code></td><td>${badge(h.estado)}</td>
     <td class="text-end">${h.registros ?? ''}</td><td>${esc(h.usuario||'')}</td></tr>`).join('')
     || '<tr><td colspan="5" class="text-center text-muted">Sin cargas</td></tr>';
 }

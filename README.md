@@ -60,8 +60,9 @@ multi/
 ### Módulos staff (`ui/modules/`)
 
 Usuarios · Asociados · Cargas (Sifone) · Configuración (movimientos/cobranza/productos) · Movimientos ·
-Créditos · Cobranza · **Comunicaciones (WhatsApp / SMS / email)** · Logs · Transacciones/Pagos · Tienda ·
-Convenios/Boletería (stock) · Solicitudes (Tickets) · Fondo de Bienestar (convenios) · Oficina.
+Créditos · Cobranza · **Comunicaciones (WhatsApp / SMS / email)** · Logs · Transacciones/Pagos · Tienda
+(incluye carga masiva de catálogo) · Convenios/Boletería (stock) · Solicitudes (Tickets) · Fondo de Bienestar
+(convenios) · Oficina (descargas, cumpleaños).
 
 ### Comunicaciones (Twilio + SMTP)
 
@@ -108,13 +109,18 @@ Convenios (carrito de boletas) · Notificaciones · Asistente IA (chat).
 
 ## 3. Base de datos y migración
 
-> **`sql/ddl.sql` es la línea base congelada del esquema.** No se edita: una BD nueva se crea solo con este archivo.
+> **`sql/ddl.sql` es la línea base congelada del esquema.** No se edita: una BD nueva se crea con este archivo
+> y luego se aplican las migraciones nuevas en orden.
 > Los cambios de esquema posteriores van como migraciones nuevas en `sql/migrations/` (ver su `README.md`).
+> La migración `018_productos_producto_validar.sql` agrega el producto a validar de las cláusulas de fidelización.
 
 ```bash
-# Crear la BD y cargar el esquema canónico
+# Crear la BD y cargar el esquema canónico + migraciones posteriores
 mysql -u USER -p -e "CREATE DATABASE multi_app_v2 CHARACTER SET utf8mb4;"
 mysql -u USER -p multi_app_v2 < sql/ddl.sql
+mysql -u USER -p multi_app_v2 < sql/migrations/018_productos_producto_validar.sql
+# Comprobar conexión a la BD (dev/test/prod)
+php scripts/health_db.php
 ```
 
 ### Migración de datos (legacy → v2)

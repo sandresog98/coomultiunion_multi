@@ -8,7 +8,11 @@ require_once $root . '/core/TokenAuth.php';
 require_once $root . '/core/asociados/AsociadoService.php';
 
 set_exception_handler(static function (Throwable $e): void {
-    if ($e instanceof DomainException) { Http::fail($e->getMessage(), 400); }
+    if ($e instanceof DomainException) { Http::fail($e->getMessage(), $e->getCode() >= 400 ? $e->getCode() : 400); }
+    if (Http::isDbUnavailable($e)) {
+        error_log('[asociados-api] DB no disponible: ' . $e->getMessage());
+        Http::failRetry('Base de datos no disponible', 503, 1);
+    }
     error_log('[asociados-api] ' . $e->getMessage());
     Http::fail('Error interno', 500);
 });

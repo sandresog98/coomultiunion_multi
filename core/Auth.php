@@ -24,8 +24,20 @@ final class Auth
     private const SESSION_NAME = 'multiappv2_staff';
     private const ROTATION_DAYS_DEFAULT = 90;
 
+    /**
+     * Cache del staff autenticado en la petición actual.
+     * Evita volver a abrir la sesión (y recuperar su lock) después de
+     * liberarla con releaseSession().
+     */
+    private static ?array $staffCache = null;
+    private static bool $staffResolved = false;
+    private static bool $sessionReleased = false;
+
     private static function boot(): void
     {
+        if (self::$sessionReleased) {
+            return; // La sesión ya se cerró en esta petición; no reabrir.
+        }
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
@@ -60,6 +72,9 @@ final class Auth
     /** Verifica credenciales y abre sesión. Devuelve el usuario o null. */
     public static function login(string $usuario, string $password): ?array
     {
+        self::$staffCache = null;
+        self::$staffResolved = false;
+        self::$sessionReleased = false;
         self::boot();
         $clave = 'staff:' . ($_SERVER['REMOTE_ADDR'] ?? '') . ':' . trim($usuario);
         if (RateLimit::bloqueado($clave)) {
@@ -91,6 +106,9 @@ final class Auth
 
     public static function logout(): void
     {
+        self::$staffCache = null;
+        self::$staffResolved = false;
+        self::$sessionReleased = false;
         self::boot();
         $s = $_SESSION['staff'] ?? null;
         if (is_array($s)) {
@@ -108,9 +126,14 @@ final class Auth
         if (class_exists('TokenAuth', false) && TokenAuth::active()) {
             return TokenAuth::actor();
         }
+        if (self::$staffResolved) {
+            return self::$staffCache;
+        }
         self::boot();
         $s = $_SESSION['staff'] ?? null;
         if (!is_array($s)) {
+            self::$staffResolved = true;
+            self::$staffCache = null;
             return null;
         }
         $lifetime = (int) (getenv('SESSION_LIFETIME') ?: 3600);
@@ -119,7 +142,29 @@ final class Auth
             return null;
         }
         $_SESSION['staff']['last_activity'] = time();
-        return $_SESSION['staff'];
+        self::$staffResolved = true;
+        self::$staffCache = $s;
+        return $s;
+    }
+
+    /**
+     * Libera el lock del archivo de sesión al terminar la autenticación.
+     * Las APIs de solo lectura no necesitan la sesión abierta durante las
+     * consultas; mantenerla bloqueada serializa todas las peticiones del
+     * navegador (misma cookie) y una API lenta bloquea a las demás.
+     */
+    public static function releaseSession(): void
+    {
+        // Solo lecturas: las mutaciones conservan la sesión para que cualquier
+        // verificación CSRF posterior siga teniendo el contexto original.
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return;
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        self::$sessionReleased = true;
     }
 
     /** Actor genérico para el resto del sistema (o null). */
@@ -157,6 +202,7 @@ final class Auth
             Http::fail('Token sin permiso para este módulo', 403);
         }
         Http::csrf();
+        self::releaseSession();
         return $s;
     }
 
@@ -182,6 +228,7 @@ final class Auth
             Http::fail('Token sin permiso para esta operación', 403);
         }
         Http::csrf();
+        self::releaseSession();
         return $s;
     }
 

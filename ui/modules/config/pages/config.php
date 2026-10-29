@@ -37,6 +37,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
         <thead><tr>
           <th class="sortable" data-col="nombre">Nombre</th>
           <th class="sortable" data-col="tipo">Tipo</th>
+          <th>Valida</th>
           <th class="text-end">Rango</th>
           <th class="sortable text-center" data-col="prioridad">Prioridad</th>
           <th class="text-center">Archivo</th>
@@ -54,7 +55,8 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
   <div class="modal-header"><h5 class="modal-title" id="mt">Nuevo</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div class="mb-2"><label class="form-label">Nombre <span class="text-danger">*</span></label><input class="form-control" id="f_nombre" required></div>
-    <div class="mb-2"><label class="form-label">Tipo</label><select class="form-select" id="f_tipo"><option value="producto">Producto</option><option value="clausula">Cláusula</option></select></div>
+    <div class="mb-2"><label class="form-label">Tipo</label><select class="form-select" id="f_tipo" onchange="toggleProductoValidar()"><option value="producto">Producto</option><option value="clausula">Cláusula</option></select></div>
+    <div class="mb-2 d-none" id="wrapProductoValidar"><label class="form-label">Producto a validar</label><select class="form-select" id="f_producto_validar"><option value="">— Sin producto —</option></select><div class="form-text">Solo para cláusulas. Ej.: “Aporte” para validar contra aportes ordinarios.</div></div>
     <div class="mb-2"><label class="form-label">Descripción</label><textarea class="form-control" id="f_descripcion" rows="2"></textarea></div>
     <div class="mb-2"><label class="form-label">Parámetros</label><textarea class="form-control" id="f_parametros" rows="2"></textarea></div>
     <div class="row g-2">
@@ -84,11 +86,27 @@ const CAN_EDIT=ACC['config.editar']===true,CAN_ELIM=ACC['config.eliminar']===tru
 const alertBox=document.getElementById('alert');
 let state = { q: '', page: 0, size: 20, order: 'tipo', dir: 'ASC' };
 let editId = null, modal, debounceTimer;
+let productosValidar = [];
+
+function toggleProductoValidar(){
+  const esClausula = document.getElementById('f_tipo').value === 'clausula';
+  document.getElementById('wrapProductoValidar').classList.toggle('d-none', !esClausula);
+  if(!esClausula) document.getElementById('f_producto_validar').value = '';
+}
+
+async function cargarProductosValidar(){
+  try{
+    const rows = await api('productos/listar');
+    productosValidar = (rows || []).filter(p => p.tipo === 'producto');
+    const sel = document.getElementById('f_producto_validar');
+    sel.innerHTML = '<option value="">— Sin producto —</option>' +
+      productosValidar.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+  }catch(e){}
+}
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 // ── Ordenamiento ──
 document.querySelectorAll('.sortable').forEach(th=>{
   th.addEventListener('click',()=>{
@@ -127,6 +145,7 @@ async function cargar(){
     document.getElementById('tbody').innerHTML = (d.rows||[]).map(r=>`<tr>
       <td>${esc(r.nombre)}<br><small class="text-muted">${esc(r.descripcion||'')}</small></td>
       <td><span class="badge text-bg-light">${esc(r.tipo)}</span></td>
+      <td><small>${r.tipo==='clausula'?(esc(r.producto_validar_nombre||'—')):'—'}</small></td>
       <td class="text-end"><small>${money(r.valor_minimo)} – ${money(r.valor_maximo)}</small></td>
       <td class="text-center">${r.prioridad}</td>
       <td class="text-center">${r.requiere_archivo==1?'<span class="badge text-bg-info">Sí</span>':'—'}</td>
@@ -134,7 +153,7 @@ async function cargar(){
       <td class="text-end">
         ${CAN_EDIT?`<button class="btn btn-sm btn-outline-primary me-1" onclick='abrir(${JSON.stringify(r)})'><i class="fas fa-edit"></i></button>`:''}
         ${CAN_ELIM?`<button class="btn btn-sm btn-outline-danger" onclick="elim(${r.id},'${esc(r.nombre)}')"><i class="fas fa-ban"></i></button>`:''}
-      </td></tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted">Sin registros</td></tr>';
+      </td></tr>`).join('') || '<tr><td colspan="8" class="text-center text-muted">Sin registros</td></tr>';
     renderPagination(total);
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }
@@ -167,6 +186,8 @@ function abrir(row){
   document.getElementById('mt').textContent = editId ? 'Editar' : 'Nuevo';
   document.getElementById('f_nombre').value = row ? row.nombre : '';
   document.getElementById('f_tipo').value = row ? row.tipo : 'producto';
+  document.getElementById('f_producto_validar').value = row && row.producto_validar_id ? String(row.producto_validar_id) : '';
+  toggleProductoValidar();
   document.getElementById('f_descripcion').value = row ? (row.descripcion||'') : '';
   document.getElementById('f_parametros').value = row ? (row.parametros||'') : '';
   document.getElementById('f_valor_minimo').value = row ? row.valor_minimo : 0;
@@ -183,6 +204,8 @@ async function guardar(){
     tipo: document.getElementById('f_tipo').value,
     descripcion: document.getElementById('f_descripcion').value.trim(),
     parametros: document.getElementById('f_parametros').value.trim(),
+    producto_validar_id: document.getElementById('f_tipo').value === 'clausula'
+      ? (parseInt(document.getElementById('f_producto_validar').value) || null) : null,
     valor_minimo: parseFloat(document.getElementById('f_valor_minimo').value)||0,
     valor_maximo: parseFloat(document.getElementById('f_valor_maximo').value)||0,
     prioridad: parseInt(document.getElementById('f_prioridad').value)||100,
@@ -203,6 +226,6 @@ async function elim(id, nombre){
   catch(e){alert(e.message);}
 }
 
-document.addEventListener('DOMContentLoaded',()=>{ modal=new bootstrap.Modal('#m'); window.Listado.mountSize('fSizeBox', state, cargar); cargar(); });
+document.addEventListener('DOMContentLoaded',()=>{ modal=new bootstrap.Modal('#m'); window.Listado.mountSize('fSizeBox', state, cargar); cargarProductosValidar(); cargar(); });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

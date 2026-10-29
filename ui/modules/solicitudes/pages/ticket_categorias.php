@@ -43,7 +43,7 @@ const API=<?php echo json_encode(apiUrl()); ?>;
 const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['solicitudes.ticket_categorias.editar']===true,CAN_DEL=ACC['solicitudes.ticket_categorias.eliminar']===true;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 async function cargar(){
   try{const d=await api('solicitudes/ticket_categorias.php?todas=1');const rows=d.rows||[];
     document.getElementById('tbody').innerHTML=rows.map(c=>`<tr><td><b>${esc(c.nombre)}</b></td><td>${esc(c.descripcion||'')}</td><td>${c.estado_activo?'<span class="badge text-bg-success">Activa</span>':'<span class="badge text-bg-secondary">Inactiva</span>'}</td>

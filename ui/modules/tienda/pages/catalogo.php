@@ -6,6 +6,7 @@ $acc = ui_acciones('tienda.catalogo', $staff['rol'] ?? '');
 $canCrear = ui_accion('tienda.catalogo', 'crear',    $staff['rol'] ?? '');
 $canEdit  = ui_accion('tienda.catalogo', 'editar',   $staff['rol'] ?? '');
 $canElim  = ui_accion('tienda.catalogo', 'eliminar', $staff['rol'] ?? '');
+$canCarga = ui_accion('tienda.catalogo', 'carga',    $staff['rol'] ?? '');
 $pageTitle = 'Catálogo';
 $currentPage = 'tienda_catalogo';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';
@@ -28,6 +29,9 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <span id="fSizeP"></span>
           <?php if ($canCrear): ?>
           <button class="btn btn-light btn-sm" onclick="abrirProducto()"><i class="fas fa-plus me-1"></i>Nuevo producto</button>
+          <?php endif; ?>
+          <?php if ($canCarga): ?>
+          <a class="btn btn-light btn-sm" href="<?php echo uiBaseUrl(); ?>modules/tienda/pages/catalogo_carga"><i class="fas fa-file-import me-1"></i>Carga masiva</a>
           <?php endif; ?>
         </span>
       </div>
@@ -205,7 +209,7 @@ let stC={q:'',est:'',page:0,size:20,order:'nombre',dir:'ASC'};
 let stM={q:'',est:'',page:0,size:20,order:'nombre',dir:'ASC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function post(p,d){return api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
 function showA(id,msg,ok){const e=document.getElementById(id);e.className='alert '+(ok?'alert-success':'alert-danger');e.textContent=msg;e.classList.remove('d-none');}
 function imgUrl(id,path){if(!path)return null;if(path.match(/^https?:/))return path;return API+'tienda/serve_imagen.php?id='+id;}
@@ -245,8 +249,10 @@ function go(elId,p){const tab=elId==='pagP'?'P':(elId==='pagC'?'C':'M');const s=
 cargarSelectsCat(); 
 async function cargarSelectsCat(){
   try{
-    const cat=await api('tienda/catalogo.php?ent=categorias&action=activas');
-    const mar=await api('tienda/catalogo.php?ent=marcas&action=activas');
+    const [cat,mar]=await Promise.all([
+      api('tienda/catalogo.php?ent=categorias&action=activas'),
+      api('tienda/catalogo.php?ent=marcas&action=activas')
+    ]);
     const selC=document.getElementById('catP'), selM=document.getElementById('marP');
     const optsC=cat.map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
     const optsM=mar.map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join('');

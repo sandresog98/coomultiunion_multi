@@ -1044,18 +1044,18 @@ paths:
       operationId: postCreditosTransicion
       tags: [Créditos]
       summary: Cambiar de etapa (u otras acciones del expediente)
-      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.actualizar`, `creditos.gestionar_solicitud.acciones` · Módulo: `creditos` · Requiere `X-Idempotency-Key` · Multiplexor por `accion`: - `etapa` → `creditos.gestionar_solicitud.etapas` - `actualizar` → `creditos.gestionar_solicitud.actualizar` - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`"
+      description: "**Restricciones.** Scope: `creditos.gestionar_solicitud.etapas`, `creditos.gestionar_solicitud.datos_basicos`, `creditos.gestionar_solicitud.acciones` · Módulo: `creditos` · Requiere `X-Idempotency-Key` · Multiplexor por `accion`: - `etapa` → `creditos.gestionar_solicitud.etapas` - `actualizar` → `creditos.gestionar_solicitud.datos_basicos` - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`"
       x-actor: staff
       x-required-scopes:
         - creditos.gestionar_solicitud.etapas
-        - creditos.gestionar_solicitud.actualizar
+        - creditos.gestionar_solicitud.datos_basicos
         - creditos.gestionar_solicitud.acciones
       x-module-gate: creditos
       x-idempotent: true
       x-restrictions: |
         Multiplexor por `accion`:
         - `etapa` → `creditos.gestionar_solicitud.etapas`
-        - `actualizar` → `creditos.gestionar_solicitud.actualizar`
+        - `actualizar` → `creditos.gestionar_solicitud.datos_basicos`
         - `cancelar|rechazar|aprobar|costos_pac|desembolso` → `creditos.gestionar_solicitud.acciones`
       requestBody:
         required: true
@@ -1413,6 +1413,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /cobranza/historial.php:
+    get:
+      operationId: getCobranzaHistorial
+      tags: [Cobranza]
+      summary: Historial unificado del asociado
+      description: "Devuelve {comunicaciones, indagaciones, compromisos} en una sola petición. — **Restricciones.** Scope: `cobranza.lista.comunicar`, `cobranza.lista.indagar`, `cobranza.lista.adjuntar` · Módulo: `cobranza`"
+      x-actor: staff
+      x-required-scopes: [cobranza.lista.comunicar, cobranza.lista.indagar, cobranza.lista.adjuntar]
+      x-module-gate: cobranza
+      x-idempotent: false
+      parameters:
+        - { name: cedula, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /cobranza/comunicaciones.php:
     get:
       operationId: getCobranzaComunicaciones
@@ -1545,6 +1563,10 @@ paths:
       x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas]
       x-module-gate: creditos
       x-idempotent: false
+      parameters:
+        - { name: ent, in: query, schema: { type: string, enum: [secciones, campos, documentos, aceptaciones] } }
+        - { name: seccion_id, in: query, schema: { type: integer } }
+        - { name: conteos, in: query, schema: { type: integer, enum: [1] } }
       responses:
         '200': { $ref: '#/components/responses/OkData' }
         '401': { $ref: '#/components/responses/Unauthorized' }

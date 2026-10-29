@@ -31,6 +31,9 @@ $menu = [
             ['tipo'=>'link', 'label'=>'Movimientos', 'icon'=>'fa-right-left',         'key'=>'movimientos',       'href'=>'modules/movimientos/pages/movimientos',            'perm'=>'oficina.transacciones', 'built'=>true, 'b'=>'B4', 'p'=>9],
         ]],
         ['tipo'=>'link', 'label'=>'Descargas', 'icon'=>'fa-download', 'key'=>'oficina_descargas', 'href'=>'modules/oficina/pages/descargas', 'perm'=>'oficina.descargas', 'built'=>true, 'b'=>'—', 'p'=>17],
+        ['tipo'=>'grupo', 'label'=>'Información', 'icon'=>'fa-circle-info', 'perm'=>'oficina', 'hijos'=>[
+            ['tipo'=>'link', 'label'=>'Cumpleaños', 'icon'=>'fa-cake-candles', 'key'=>'cumpleanos', 'href'=>'modules/oficina/pages/cumpleanos', 'perm'=>'oficina.cumpleanos', 'built'=>true, 'b'=>'—', 'p'=>0],
+        ]],
         ['tipo'=>'grupo', 'label'=>'Datos', 'icon'=>'fa-database', 'perm'=>'cargas', 'hijos'=>[
             ['tipo'=>'link', 'label'=>'Cargas de archivos', 'icon'=>'fa-file-import', 'key'=>'cargas', 'href'=>'modules/cargas/pages/cargas', 'perm'=>'cargas', 'built'=>true, 'b'=>'B2', 'p'=>16],
         ]],
@@ -55,6 +58,7 @@ $menu = [
     ]],
     ['tipo'=>'grupo', 'label'=>'Tienda', 'icon'=>'fa-store', 'perm'=>'tienda', 'hijos'=>[
         ['tipo'=>'link', 'label'=>'Catálogo', 'icon'=>'fa-box-open',     'key'=>'tienda_catalogo',    'href'=>'modules/tienda/pages/catalogo',    'perm'=>'tienda.catalogo',    'built'=>true, 'b'=>'B8', 'p'=>47],
+        ['tipo'=>'link', 'label'=>'Carga masiva', 'icon'=>'fa-file-import', 'key'=>'tienda_catalogo_carga', 'href'=>'modules/tienda/pages/catalogo_carga', 'perm'=>'tienda.catalogo', 'built'=>true, 'b'=>'B8', 'p'=>47],
         ['tipo'=>'link', 'label'=>'Clientes', 'icon'=>'fa-id-card',     'key'=>'tienda_clientes',    'href'=>'modules/tienda/pages/clientes',    'perm'=>'tienda.clientes',    'built'=>true, 'b'=>'B8', 'p'=>48],
         ['tipo'=>'link', 'label'=>'Compras', 'icon'=>'fa-cart-plus',      'key'=>'tienda_compras',     'href'=>'modules/tienda/pages/compras',     'perm'=>'tienda.compras',     'built'=>true, 'b'=>'B8', 'p'=>49],
         ['tipo'=>'link', 'label'=>'Inventario', 'icon'=>'fa-warehouse',   'key'=>'tienda_inventario',  'href'=>'modules/tienda/pages/inventario',  'perm'=>'tienda.inventario',  'built'=>true, 'b'=>'B8', 'p'=>50],

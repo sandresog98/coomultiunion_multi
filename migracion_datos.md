@@ -279,6 +279,7 @@ Bloques para `--only`: `usuarios, asociados, productos, asignaciones, movimiento
 - **Créditos**: la re-ejecución preserva las solicitudes nuevas de v2 (`origen_id IS NULL`); solo borra/reinserta las migradas (`origen_tabla='credito_docs_solicitudes'`).
 - **Storage (R2)**: los archivos de `créditos`, `pagos`, `boletas`, `solicitudes`, `cobranza`, `fondo` se migran a Cloudflare R2 (`scripts/migrar_r2.php`, idempotente); `tienda`, `cargas`, `convenios` quedan **locales**.
 - **Integridad de ids**: `usuarios.id` y `productos.id` se preservan.
+- **Productos asignados**: `asociados_productos.monto` se migra desde `control_asignacion_asociado_producto.monto_pago` (no se fija en 0). Validar 1.026 asignaciones legacy + 38 cláusulas = **1.064 filas** y suma total **$29.759.812**. Si una BD ya quedó con `monto = 0`, ejecutar el fix idempotente `sql/dumps/fix_asociados_productos_monto.sql` y confirmar que `SUM(monto) = 29.759.812`.
 
 ---
 

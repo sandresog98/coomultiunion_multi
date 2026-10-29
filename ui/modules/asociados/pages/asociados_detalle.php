@@ -8,6 +8,7 @@ $puedeSaldos    = $sec['asociados.detalle.saldos']    ?? false;
 $puedeCreditos  = $sec['asociados.detalle.creditos']  ?? false;
 $puedeDetalleCr = $sec['asociados.detalle.creditos_detalle'] ?? false;
 $puedeProductos = $sec['asociados.detalle.productos'] ?? false;
+$puedeMovimientos = $sec['asociados.detalle.movimientos'] ?? false;
 $puedeCobranza  = $sec['asociados.detalle.cobranza']  ?? false;
 $puedeComunicaciones = $sec['asociados.detalle.comunicaciones'] ?? false;
 $acc = ui_acciones('asociados.detalle', $rol);
@@ -326,7 +327,7 @@ function row(string $label, string $value, string $valueClass = ''): string {
           <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light"><tr>
               <th>Producto</th><th>Tipo</th><th class="text-end">Monto</th>
-              <th class="text-center">Día pago</th><th class="text-center">Vigencia</th><th class="text-center">Archivo</th><th class="text-center">Acciones</th>
+              <th class="text-center">Día pago</th><th class="text-center">Vigencia</th><th class="text-center">Pagos</th><th class="text-center">Archivo</th><th class="text-center">Acciones</th>
             </tr></thead>
             <tbody id="prodTbody"><tr><td colspan="7" class="text-center text-muted">Cargando…</td></tr></tbody>
           </table>
@@ -335,6 +336,54 @@ function row(string $label, string $value, string $valueClass = ''): string {
     </div>
   </div>
 </div>
+<?php endif; ?>
+
+<!-- Movimientos / transacciones del asociado -->
+<?php if ($puedeMovimientos): ?>
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="card" id="cardMovimientos">
+      <div class="card-header brand d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-receipt me-2"></i>Movimientos y aplicación de pagos</strong>
+        <span class="d-flex align-items-center gap-2">
+          <span class="small text-white-50" id="movInfo"></span>
+          <span id="movSizeBox"></span>
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 mb-3 align-items-end">
+          <div class="col-auto"><label class="form-label small text-muted mb-0">Origen</label>
+            <select class="form-select form-select-sm" id="movOrigen" style="width:140px">
+              <option value="">Todos</option>
+              <option value="pse">PSE</option>
+              <option value="confiar">Confiar</option>
+              <option value="boleta">Boleta</option>
+            </select>
+          </div>
+          <div class="col-auto"><label class="form-label small text-muted mb-0">Desde</label><input type="date" class="form-control form-control-sm" id="movDesde" style="width:140px"></div>
+          <div class="col-auto"><label class="form-label small text-muted mb-0">Hasta</label><input type="date" class="form-control form-control-sm" id="movHasta" style="width:140px"></div>
+        </div>
+        <div id="movAlert" class="alert d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light"><tr>
+              <th>Fecha</th><th>Origen</th><th>Pago ID</th><th class="text-end">Valor asignado</th><th>Recibo caja</th><th class="text-end">Acciones</th>
+            </tr></thead>
+            <tbody id="movTbody"><tr><td colspan="6" class="text-center text-muted">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <nav id="movPaginacion" class="d-flex justify-content-center mt-3"></nav>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalle de movimiento -->
+<div class="modal fade" id="mMovDetalle" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-receipt me-2"></i>Detalle de movimiento</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body" id="movDetalleContent"></div>
+  <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button></div>
+</div></div></div>
 <?php endif; ?>
 
 <!-- Modal Asignar producto/cláusula -->
@@ -481,16 +530,59 @@ const CED = <?php echo json_encode($cedula); ?>;
 const SEC = <?php echo json_encode($sec, JSON_UNESCAPED_UNICODE); ?>;
 const ACC = <?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const PUEDE_COB = SEC['asociados.detalle.cobranza'] === true;
+const PUEDE_MOV = SEC['asociados.detalle.movimientos'] === true;
 const CAN_ASIGNAR=ACC['asociados.detalle.asignar']===true;
 const CAN_EDITAR =ACC['asociados.detalle.editar']===true;
 const CAN_ELIMINAR=ACC['asociados.detalle.eliminar']===true;
 const CAN_TOGGLE_P=ACC['asociados.detalle.toggle']===true;
 const MI = <?php echo json_encode((int) ($staff['id'] ?? 0)); ?>;
 let mAsignar, mEditar, productosActivos = [];
+let asignacionesActivas = [];
+let catalogoProductosCargado = false;
+let catalogoProductosPromise = null;
+let cobTiposCargados = false;
+let cobTiposPromise = null;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
-async function api(p,opt){const r=await fetch(API+p,opt);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function fmtFechaJs(v){if(!v)return '—';const s=String(v).slice(0,10).split('-');return s.length===3?`${s[2]}/${s[1]}/${s[0]}`:'—';}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function api(p,opt){
+  opt = opt || {};
+  const MAX = 2;
+  let lastErr = null;
+  for (let i = 0; i < MAX; i++) {
+    let r;
+    const esMutacion = String(opt.method || 'GET').toUpperCase() !== 'GET';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), esMutacion ? 30000 : 12000);
+    try {
+      r = await fetch(API + p, {...opt, signal: controller.signal});
+    } catch (netErr) {
+      if (netErr && netErr.name === 'AbortError') {
+        throw new Error('La solicitud tardó demasiado. Intenta de nuevo.');
+      }
+      // Error de red (fetch rechazó): reintenta una vez con backoff.
+      lastErr = new Error('Sin conexión con el servidor');
+      if (i < MAX - 1) { await sleep(400 * Math.pow(2, i) + Math.random() * 200); continue; }
+      throw lastErr;
+    } finally {
+      clearTimeout(timer);
+    }
+    let j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (j && j.ok) return j.data;
+    // Solo reintenta errores transitorios del servidor/BD.
+    const retriable = r.status === 502 || r.status === 503 || r.status === 504;
+    if (retriable && i < MAX - 1) {
+      const ra = parseInt(r.headers.get('Retry-After') || '0', 10);
+      await sleep(ra > 0 ? Math.min(ra, 3) * 1000 : (400 * Math.pow(2, i) + Math.random() * 200));
+      continue;
+    }
+    throw new Error((j && j.error) || ('Error ' + r.status));
+  }
+  throw lastErr || new Error('No se pudo completar la solicitud');
+}
 
 // ── Toggle estado ──
 async function toggleEstado(activo){
@@ -512,39 +604,85 @@ async function toggleOptIn(optIn){
 }
 
 // ── Cargar productos ──
-async function cargarProductos(){
-  try{
-    productosActivos = await api('productos/listar');
+function prodError(msg){
+  const a = document.getElementById('prodAlert');
+  const t = document.getElementById('prodTbody');
+  if (t) t.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No se pudieron cargar los productos</td></tr>';
+  if (a) {
+    a.className = 'alert alert-danger m-3 mb-0';
+    a.innerHTML = esc(msg) + ' <button class="btn btn-sm btn-outline-danger ms-2" onclick="cargarAsignaciones()"><i class="fas fa-rotate-right me-1"></i>Reintentar</button>';
+  }
+}
+function prodLimpiarError(){
+  const a = document.getElementById('prodAlert');
+  if (a) { a.className = 'alert d-none m-3 mb-0'; a.textContent = ''; }
+}
+
+/** Catálogo de productos: solo se carga cuando se abre el modal "Asignar". */
+async function cargarCatalogoProductos(){
+  if (catalogoProductosCargado) return;
+  if (catalogoProductosPromise) return catalogoProductosPromise;
+  catalogoProductosPromise = (async () => {
+    const rows = await api('productos/listar?basico=1');
+    productosActivos = rows || [];
     const sel = document.getElementById('asigProdId');
-    sel.innerHTML = '<option value="" disabled selected>Seleccione…</option>';
-    productosActivos.forEach(p=>{
-      sel.innerHTML += `<option value="${p.id}" data-tipo="${p.tipo}"
-        data-min="${p.valor_minimo}" data-max="${p.valor_maximo}"
-        data-archivo="${p.requiere_archivo||0}">${esc(p.nombre)} (${p.tipo})</option>`;
-    });
-    await cargarAsignaciones();
-  }catch(e){alert(e.message);}
+    if (sel) {
+      sel.innerHTML = '<option value="" disabled selected>Seleccione…</option>' + productosActivos.map(p =>
+        `<option value="${p.id}" data-tipo="${esc(p.tipo)}"
+          data-min="${p.valor_minimo}" data-max="${p.valor_maximo}"
+          data-archivo="${p.requiere_archivo||0}">${esc(p.nombre)} (${esc(p.tipo)})</option>`
+      ).join('');
+    }
+    catalogoProductosCargado = true;
+  })().finally(() => { catalogoProductosPromise = null; });
+  return catalogoProductosPromise;
 }
 
 async function cargarAsignaciones(){
+  prodLimpiarError();
   try{
-    const rows = await api('productos/asignaciones?cedula='+encodeURIComponent(CED));
+    asignacionesActivas = await api('productos/asignaciones?cedula='+encodeURIComponent(CED)) || [];
+    const rows = asignacionesActivas;
     let total = 0;
     rows.forEach(r=>{ if(r.estado_activo==1) total += parseFloat(r.monto||0); });
     document.getElementById('prodTotal').textContent = money(total);
     document.getElementById('prodTbody').innerHTML = rows.length ? rows.map(r=>{
       const esClausula = r.tipo === 'clausula';
-      const vigencia = esClausula ? (r.fecha_inicio?`${r.fecha_inicio} / ${r.meses_vigencia||'—'}m`:'—') : '—';
       const inactivo = r.estado_activo == 0;
+      let vigencia = '—', pagos = '—';
+      if (esClausula) {
+        if (r.meses_cumplidos === null || r.meses_cumplidos === undefined) {
+          vigencia = '<span class="badge text-bg-secondary">Sin vigencia</span>';
+        } else {
+          const ESTADOS = {
+            nueva:        ['Nueva', 'text-bg-info'],
+            cumpliendo:   ['Cumpliendo', 'text-bg-success'],
+            incumpliendo: ['Incumpliendo', 'text-bg-warning text-dark'],
+            cumplida:     ['Cumplida', 'text-bg-success'],
+            incumplida:   ['Incumplida', 'text-bg-danger']
+          };
+          const est = ESTADOS[r.estado_vigencia] || ['—', 'text-bg-secondary'];
+          let badge = `<span class="badge ${est[1]}">${est[0]}</span>`;
+          if (inactivo) badge += ' <span class="badge text-bg-secondary">Inactiva</span>';
+          const total = r.total_meses ?? r.meses_vigencia ?? '—';
+          const restan = (r.meses_restantes !== null && r.meses_restantes !== undefined) ? r.meses_restantes : '—';
+          vigencia = `${badge}<div class="small">${r.meses_cumplidos}/${total} meses · restan ${restan}</div>` +
+            (r.fecha_fin ? `<div class="small text-muted">Fin: ${fmtFechaJs(r.fecha_fin)}</div>` : '');
+          if (r.pagos_realizados !== null && r.pagos_realizados !== undefined) {
+            pagos = `${r.pagos_realizados}/${total}`;
+          }
+        }
+      }
       const rowCls = inactivo ? 'text-muted text-decoration-line-through' : '';
       let det = {}, archivo = '—';
       try { det = JSON.parse(r.detalle||'{}'); } catch(e){}
       if(det.archivo_ruta) archivo = `<a href="${det.archivo_ruta}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Ver archivo"><i class="fas fa-file"></i></a>`;
       return `<tr class="${rowCls}">
-        <td>${esc(r.producto_nombre)}${inactivo?' <span class="badge text-bg-secondary">Inactivo</span>':''}</td>
+        <td>${esc(r.producto_nombre)}${r.producto_validar_nombre?`<div class="small text-muted">Valida: ${esc(r.producto_validar_nombre)}</div>`:''}${inactivo?' <span class="badge text-bg-secondary">Inactivo</span>':''}</td>
         <td><span class="badge text-bg-light">${esc(r.tipo)}</span></td>
         <td class="text-end">${money(r.monto)}</td>
         <td class="text-center">${esClausula?'—':(r.dia_pago||'—')}</td><td class="text-center">${vigencia}</td>
+        <td class="text-center">${pagos}</td>
         <td class="text-center">${archivo}</td>
         <td class="text-center">
           ${CAN_EDITAR?`<button class="btn btn-sm btn-outline-primary me-1" onclick="abrirEditar(${r.id})"><i class="fas fa-edit"></i></button>`:''}
@@ -552,8 +690,8 @@ async function cargarAsignaciones(){
           ${CAN_TOGGLE_P?`<button class="btn btn-sm btn-outline-secondary" onclick="toggleProducto(${r.id})" title="${r.estado_activo==1?'Inactivar':'Activar'}"><i class="fas ${r.estado_activo==1?'fa-toggle-on text-success':'fa-toggle-off text-danger'}"></i></button>`:''}
         </td>
       </tr>`;
-    }).join('') : '<tr><td colspan="7" class="text-center text-muted">Sin asignaciones</td></tr>';
-  }catch(e){alert(e.message);}
+    }).join('') : '<tr><td colspan="8" class="text-center text-muted">Sin asignaciones</td></tr>';
+  }catch(e){ prodError(e.message); }
 }
 
 // ── Upload archivo ──
@@ -592,7 +730,13 @@ function toggleAsigFields(){
   document.getElementById('asigRango').textContent = `Rango: ${money(min)} - ${max>0?money(max):'sin límite'}`;
 }
 
-function abrirAsignar(){
+async function abrirAsignar(){
+  try {
+    await cargarCatalogoProductos();
+  } catch (e) {
+    alert('No se pudo cargar el catálogo de productos: ' + e.message);
+    return;
+  }
   document.getElementById('frmAsignar').reset();
   document.getElementById('asigProdId').selectedIndex = 0;
   document.getElementById('asigDiaPago').classList.remove('d-none');
@@ -623,8 +767,11 @@ async function guardarAsignacion(e){
 }
 
 async function abrirEditar(id){
-  const asignaciones = await api('productos/asignaciones?cedula='+encodeURIComponent(CED));
-  const a = asignaciones.find(r=>r.id===id);
+  let a = asignacionesActivas.find(r=>r.id===id);
+  if(!a){
+    await cargarAsignaciones();
+    a = asignacionesActivas.find(r=>r.id===id);
+  }
   if(!a) return alert('Asignación no encontrada.');
   document.getElementById('editId').value = a.id;
   document.getElementById('editNombre').textContent = a.producto_nombre+' ('+a.tipo+')';
@@ -674,8 +821,7 @@ async function eliminarAsig(id, nombre){
 
 async function toggleProducto(id){
   try{
-    const rows = await api('productos/asignaciones?cedula='+encodeURIComponent(CED));
-    const a = rows.find(r=>r.id===id);
+    const a = asignacionesActivas.find(r=>r.id===id);
     if(!a) return;
     const accion = a.estado_activo == 1 ? 'inactivar' : 'activar';
     if(!confirm(`¿Confirmar ${accion} "${a.producto_nombre}"?`)) return;
@@ -684,28 +830,180 @@ async function toggleProducto(id){
   }catch(e){alert(e.message);}
 }
 
+// ── Movimientos del asociado ──────────────────────────────────────────
+let movState = { page: 0, size: 5, origen: '', desde: '', hasta: '' };
+let movRows = [];
+let mMovDetalle;
+
+function movFecha(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CO');
+}
+
+async function cargarMovimientos() {
+  if (!PUEDE_MOV) return;
+  const movAl = document.getElementById('movAlert');
+  if (movAl) { movAl.className = 'alert d-none'; movAl.textContent = ''; }
+  const o = movState.page * movState.size;
+  let qs = 'cedula=' + encodeURIComponent(CED) + '&limit=' + movState.size + '&offset=' + o;
+  if (movState.origen) qs += '&origen=' + encodeURIComponent(movState.origen);
+  if (movState.desde) qs += '&fecha_desde=' + encodeURIComponent(movState.desde);
+  if (movState.hasta) qs += '&fecha_hasta=' + encodeURIComponent(movState.hasta);
+  try {
+    const d = await api('asociados/movimientos?' + qs);
+    movRows = d.rows || [];
+    const total = d.total || 0;
+    document.getElementById('movInfo').textContent = total > 0
+      ? `Mostrando ${o + 1}-${Math.min(o + movState.size, total)} de ${total}` : '';
+    document.getElementById('movTbody').innerHTML = movRows.length ? movRows.map((tx, i) => {
+      const pago = tx.pse_id || tx.confiar_id || '—';
+      return `<tr>
+        <td><small>${movFecha(tx.fecha_creacion)}</small></td>
+        <td><span class="badge text-bg-secondary">${esc(tx.origen)}</span></td>
+        <td><small>${esc(pago)}</small></td>
+        <td class="text-end">${money((tx.valor_asignado && Number(tx.valor_asignado) > 0) ? tx.valor_asignado : tx.valor_total)}</td>
+        <td><small>${tx.recibo_caja ? esc(tx.recibo_caja) : '—'}</small></td>
+        <td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="movVerDetalle(${i})" title="Ver detalle"><i class="fas fa-eye"></i></button></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" class="text-center text-muted">Sin movimientos</td></tr>';
+    renderMovPaginacion(total);
+  } catch (e) {
+    const a = document.getElementById('movAlert');
+    a.className = 'alert alert-danger';
+    a.innerHTML = esc(e.message) + ' <button class="btn btn-sm btn-outline-danger ms-2" onclick="cargarMovimientos()"><i class="fas fa-rotate-right me-1"></i>Reintentar</button>';
+    a.classList.remove('d-none');
+    const t = document.getElementById('movTbody');
+    if (t) t.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No se pudieron cargar los movimientos</td></tr>';
+  }
+}
+
+function movVerDetalle(i) {
+  const tx = movRows[i];
+  if (!tx) return;
+  const detalles = (tx.detalles || []).map(dd => `<tr>
+    <td><span class="badge text-bg-light">${esc(dd.tipo_rubro)}</span></td>
+    <td>${esc(dd.producto_nombre || dd.descripcion || dd.referencia_credito || dd.producto_id || '—')}</td>
+    <td class="text-end fw-semibold">${money(dd.valor_asignado)}</td>
+  </tr>`).join('');
+  const valor = (tx.valor_asignado && Number(tx.valor_asignado) > 0) ? tx.valor_asignado : tx.valor_total;
+  document.getElementById('movDetalleContent').innerHTML = `
+    <div class="row small g-2">
+      <div class="col-md-6"><strong>Movimiento:</strong> #${esc(tx.id)}</div>
+      <div class="col-md-6"><strong>Fecha:</strong> ${movFecha(tx.fecha_creacion)}</div>
+      <div class="col-md-6"><strong>Origen:</strong> ${esc(tx.origen)}</div>
+      <div class="col-md-6"><strong>Pago ID:</strong> ${esc(tx.pse_id || tx.confiar_id || '—')}</div>
+      <div class="col-md-6"><strong>Recibo:</strong> ${tx.recibo_caja ? esc(tx.recibo_caja) : '—'}</div>
+      <div class="col-md-6"><strong>Valor:</strong> ${money(valor)}</div>
+    </div>
+    <hr>
+    <h6 class="text-brand mb-2">Aplicación de pagos</h6>
+    <div class="table-responsive"><table class="table table-sm small mb-0">
+      <thead class="table-light"><tr><th>Tipo</th><th>Referencia / Producto</th><th class="text-end">Valor</th></tr></thead>
+      <tbody>${detalles || '<tr><td colspan="3" class="text-muted">Sin detalle</td></tr>'}</tbody>
+    </table></div>`;
+  mMovDetalle.show();
+}
+
+function renderMovPaginacion(total) {
+  const N = Math.ceil(total / movState.size);
+  const nav = document.getElementById('movPaginacion');
+  if (N <= 1) { nav.innerHTML = ''; return; }
+  const C = movState.page, pages = [];
+  if (N <= 10) { for (let i = 0; i < N; i++) pages.push(i); }
+  else {
+    pages.push(0);
+    if (C > 3) pages.push('...');
+    for (let i = Math.max(1, C - 2); i <= Math.min(N - 2, C + 2); i++) pages.push(i);
+    if (C < N - 4) pages.push('...');
+    pages.push(N - 1);
+  }
+  let h = [];
+  if (C > 0) h.push(`<li class="page-item"><a class="page-link" href="#" onclick="movGoPage(${C - 1});return false;">«</a></li>`);
+  pages.forEach(p => {
+    if (p === '...') h.push('<li class="page-item disabled"><span class="page-link">…</span></li>');
+    else h.push(`<li class="page-item ${p === C ? 'active' : ''}"><a class="page-link" href="#" onclick="movGoPage(${p});return false;">${p + 1}</a></li>`);
+  });
+  if (C < N - 1) h.push(`<li class="page-item"><a class="page-link" href="#" onclick="movGoPage(${C + 1});return false;">»</a></li>`);
+  nav.innerHTML = `<ul class="pagination pagination-sm justify-content-center mb-0">${h.join('')}</ul>`;
+}
+
+function movGoPage(p) {
+  if (p < 0) return;
+  movState.page = p;
+  cargarMovimientos();
+}
+
+/** Ejecuta la carga cuando la sección entra en pantalla (o de inmediato si no hay IO). */
+function cargarAlVisible(el, fn) {
+  if (!el || !('IntersectionObserver' in window)) { fn(); return; }
+  let hecho = false;
+  const obs = new IntersectionObserver((entries) => {
+    if (hecho) return;
+    if (entries.some(e => e.isIntersecting)) {
+      hecho = true;
+      obs.disconnect();
+      fn();
+    }
+  }, { rootMargin: '200px 0px' });
+  obs.observe(el);
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   if(SEC['asociados.detalle.productos']){
     mAsignar = new bootstrap.Modal('#mAsignar');
     mEditar = new bootstrap.Modal('#mEditar');
-    cargarProductos();
+    cargarAsignaciones();
   }
-  if(PUEDE_COB){ mCobCom=new bootstrap.Modal('#mCobCom'); mCobInd=new bootstrap.Modal('#mCobInd'); cobCargarTipos(); cargarCobranza(); }
+  if(PUEDE_MOV){
+    mMovDetalle = new bootstrap.Modal('#mMovDetalle');
+    if (window.Listado && document.getElementById('movSizeBox')) {
+      Listado.mountSize('movSizeBox', movState, cargarMovimientos, { sizes: [5, 10, 20, 50], class: 'small text-white-50' });
+    }
+    ['movOrigen','movDesde','movHasta'].forEach(id=>{
+      document.getElementById(id).addEventListener('change',function(){
+        const key = id === 'movOrigen' ? 'origen' : (id === 'movDesde' ? 'desde' : 'hasta');
+        movState[key] = this.value; movState.page = 0; cargarMovimientos();
+      });
+    });
+    cargarAlVisible(document.getElementById('cardMovimientos'), cargarMovimientos);
+  }
+  if(PUEDE_COB){
+    mCobCom=new bootstrap.Modal('#mCobCom');
+    mCobInd=new bootstrap.Modal('#mCobInd');
+    cargarAlVisible(document.getElementById('cardCobranza'), cargarCobranza);
+  }
 });
 
 function cobFdt(v){return v?new Date(v).toLocaleDateString('es-CO'):'—';}
 let cobComps=[],cobComs=[],cobInds=[],cobPageComp=0,cobPageComm=0,cobPageInd=0,cobPG=4;
 
+function cobError(id, fn){
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = `<div class="text-muted small py-2">No se pudo cargar. <button class="btn btn-sm btn-outline-secondary ms-1" onclick="${fn}()"><i class="fas fa-rotate-right me-1"></i>Reintentar</button></div>`;
+}
+function cobRenderTodo(){
+  cobPageComp=0;cobPageComm=0;cobPageInd=0;
+  cobComs.sort((a,b)=>(b.fecha||'')>(a.fecha||'')?1:-1);
+  cobInds.sort((a,b)=>(b.fecha||'')>(a.fecha||'')?1:-1);
+  renderCompromisos();
+  renderComunicaciones();
+  renderIndagaciones();
+}
 async function cargarCobranza(){
+  // Una sola petición trae los tres historiales de la ficha.
   try{
-    cobComps=await api('cobranza/compromisos?cedula='+encodeURIComponent(CED));
-    cobComs=await api('cobranza/comunicaciones?cedula='+encodeURIComponent(CED));
-    cobInds=await api('cobranza/indagaciones?cedula='+encodeURIComponent(CED));
-    cobComs.sort((a,b)=>(b.fecha||'')>(a.fecha||'')?1:-1);
-    cobInds.sort((a,b)=>(b.fecha||'')>(a.fecha||'')?1:-1);
-    cobPageComp=0;cobPageComm=0;cobPageInd=0;
-    renderCompromisos();renderComunicaciones();renderIndagaciones();
-  }catch(e){document.getElementById('comunicacionesCob').innerHTML='<div class="text-muted small py-2">Sin datos o sin acceso</div>';}
+    const d = await api('cobranza/historial?cedula='+encodeURIComponent(CED)) || {};
+    cobComps = d.compromisos || [];
+    cobComs = d.comunicaciones || [];
+    cobInds = d.indagaciones || [];
+    cobRenderTodo();
+  }catch(e){
+    cobComps=[];cobComs=[];cobInds=[];
+    cobError('compromisosCob','cargarCobranza');
+    cobError('comunicacionesCob','cargarCobranza');
+    cobError('indagacionesCob','cargarCobranza');
+  }
 }
 function cobPagination(n,page,fn){const N=Math.ceil(n/cobPG);if(N<=1)return '';
   return `<div class="d-flex justify-content-between align-items-center small text-muted pt-2">
@@ -762,22 +1060,32 @@ function cobCompBadge(ec){const m={cumplido:['Cumplido','success'],incumplido:['
 // ── CRUD cobranza por creador ──
 let mCobCom, mCobInd, cobTIPOS={};
 async function cobCargarTipos(){
-  try{const rows=await api('cobranza/tipos?opciones=1');
+  if (cobTiposCargados) return;
+  if (cobTiposPromise) return cobTiposPromise;
+  cobTiposPromise = (async () => {
+    const rows = await api('cobranza/tipos?opciones=1');
     cobTIPOS={};rows.forEach(t=>{cobTIPOS[t.id]={tipo:t.tipo,estado:t.estado};});
     const tipos=[...new Set(rows.map(t=>t.tipo))],estados=[...new Set(rows.map(t=>t.estado))];
     document.getElementById('cobComTipo').innerHTML=tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
     document.getElementById('cobComEstado').innerHTML=estados.map(s=>`<option value="${s}">${s}</option>`).join('');
-  }catch(e){}
+    cobTiposCargados = true;
+  })().finally(() => { cobTiposPromise = null; });
+  return cobTiposPromise;
 }
 document.getElementById('cobComEstado').addEventListener('change',function(){const s=this.value==='comprometido';document.getElementById('wrapCobComp').classList.toggle('d-none',!s);document.getElementById('wrapCobCompM').classList.toggle('d-none',!s);});
-function cobNuevaCom(){
+async function cobNuevaCom(){
+  try { await cobCargarTipos(); } catch(e) {
+    alert('No se pudieron cargar los tipos de comunicación: ' + e.message);
+    return false;
+  }
   document.getElementById('cobComId').value='';document.getElementById('cobComFecha').value=new Date().toISOString().slice(0,16);
   document.getElementById('cobComComent').value='';document.getElementById('cobComFecComp').value='';document.getElementById('cobComMonto').value='';
   document.getElementById('wrapCobComp').classList.add('d-none');document.getElementById('wrapCobCompM').classList.add('d-none');
   document.getElementById('cobComTitle').textContent='Nueva comunicación';mCobCom.show();
+  return true;
 }
-function cobNuevoComp(){
-  cobNuevaCom();
+async function cobNuevoComp(){
+  if (!await cobNuevaCom()) return;
   document.getElementById('cobComTitle').textContent='Nuevo compromiso';
   const est=document.getElementById('cobComEstado');
   est.value=(Array.from(est.options).find(o=>o.value==='comprometido')?'comprometido':est.value);
@@ -785,7 +1093,11 @@ function cobNuevoComp(){
   document.getElementById('wrapCobComp').classList.toggle('d-none',!s);
   document.getElementById('wrapCobCompM').classList.toggle('d-none',!s);
 }
-function cobEditarCom(c){
+async function cobEditarCom(c){
+  try { await cobCargarTipos(); } catch(e) {
+    alert('No se pudieron cargar los tipos de comunicación: ' + e.message);
+    return;
+  }
   document.getElementById('cobComId').value=c.id;document.getElementById('cobComTitle').textContent='Editar comunicación';
   document.getElementById('cobComTipo').value=c.tipo_comunicacion||'';document.getElementById('cobComEstado').value=c.estado||'';
   document.getElementById('cobComFecha').value=(c.fecha||'').replace(' ','T');

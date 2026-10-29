@@ -22,6 +22,7 @@ final class CreditoService
         'estudio_rechazado' => 'rechazado', 'final' => 'desembolsado',
     ];
     private const ETAPAS = ['creacion', 'revision', 'estudio', 'consideracion', 'estudio_aprobado', 'radicado_tesoreria', 'estudio_rechazado', 'final'];
+    private const TIPOS_SOLICITANTE = ['estudiante', 'empleado_descuento_nomina', 'empleado_sin_descuento', 'independiente', 'pensionado_descuento_libranza', 'pensionado_sin_descuento_libranza'];
 
     public function __construct(private ?PDO $db = null, private ?CreditoConfigService $cfg = null)
     {
@@ -165,23 +166,61 @@ final class CreditoService
         $this->notificarNota($id, 'Su solicitud de crédito fue RECHAZADA. Motivo: ' . $comentario);
     }
 
-    /** Edita datos básicos del solicitante (nombre, contacto, monto/cuotas deseados, codeudor). */
+    /** Edita los datos de creación de una solicitud UI (solicitante, valores y línea original). */
     public function actualizarDatosBasicos(int $id, array $d, ?array $actor = null): void
     {
         $s = $this->exigirEditable($this->uno($id));
         if ($s['origen'] !== 'ui') {
             throw new DomainException('Solo se pueden editar los datos de solicitudes creadas en UI (origen=ui).');
         }
-        $nombre = trim((string) ($d['nombre_solicitante'] ?? ''));
+        $nombre = trim((string) ($d['nombre_solicitante'] ?? ($s['nombre_solicitante'] ?? '')));
         if ($nombre === '') throw new DomainException('El nombre del solicitante es obligatorio.');
-        $monto = (float) ($d['monto_deseado'] ?? 0);
+
+        $tipo = trim((string) ($d['tipo_solicitante'] ?? ($s['tipo_solicitante'] ?? '')));
+        if (!in_array($tipo, self::TIPOS_SOLICITANTE, true)) {
+            throw new DomainException('El tipo de solicitante no es válido.');
+        }
+
+        $monto = (float) ($d['monto_deseado'] ?? ($s['monto_deseado'] ?? 0));
         if ($monto < 100000) throw new DomainException('El monto deseado debe ser al menos $100.000.');
-        $cuotas = (int) ($d['numero_cuotas_deseadas'] ?? 0);
+        $cuotas = (int) ($d['numero_cuotas_deseadas'] ?? ($s['numero_cuotas_deseadas'] ?? 0));
         if ($cuotas < 1 || $cuotas > 72) throw new DomainException('Las cuotas deseadas deben estar entre 1 y 72.');
+
+        $lineaActual = (int) ($s['tasa_interes_id'] ?? 0);
+        $lineaId = array_key_exists('tasa_interes_id', $d) ? (int) $d['tasa_interes_id'] : $lineaActual;
+        if ($lineaId > 0) {
+            $linea = null;
+            foreach ($this->cfg->lineas(true, true) as $l) {
+                if ((int) $l['id'] === $lineaId) { $linea = $l; break; }
+            }
+            // La línea original puede estar inactiva u oculta: se permite conservarla.
+            if ($linea === null && $lineaId === $lineaActual) {
+                $st = $this->db->prepare("SELECT * FROM credito_lineas WHERE id=?");
+                $st->execute([$lineaId]);
+                $linea = $st->fetch() ?: null;
+            }
+            if ($linea === null) throw new DomainException('La línea de crédito no es válida.');
+            if ((int) ($linea['limite_meses'] ?? 0) > 0 && $cuotas > (int) $linea['limite_meses']) {
+                throw new DomainException('Las cuotas superan el límite de la línea (' . (int) $linea['limite_meses'] . ').');
+            }
+        }
+
+        $desear = array_key_exists('desea_codeudor', $d) ? (int) !empty($d['desea_codeudor']) : (int) !empty($s['desea_codeudor']);
+        $tipoCodeudor = trim((string) ($d['tipo_codeudor'] ?? ($s['tipo_codeudor'] ?? '')));
+        if (!$desear) {
+            $tipoCodeudor = 'no_necesita';
+        } elseif (!in_array($tipoCodeudor, ['codeudor_dependiente', 'codeudor_pensionado'], true)) {
+            throw new DomainException('Debe indicar el tipo de codeudor.');
+        }
+
+        $identificacion = trim((string) ($d['numero_identificacion'] ?? ($s['numero_identificacion'] ?? '')));
+        $telefono = trim((string) ($d['numero_telefono'] ?? ($s['numero_telefono'] ?? '')));
+        $correo = trim((string) ($d['correo_electronico'] ?? ($s['correo_electronico'] ?? '')));
+
         $this->db->prepare(
-            "UPDATE credito_solicitudes SET nombre_solicitante=?, numero_telefono=?, correo_electronico=?, monto_deseado=?, numero_cuotas_deseadas=?, desea_codeudor=?, tipo_codeudor=?, fecha_actualizacion=NOW() WHERE id=?"
-        )->execute([$nombre, trim((string) ($d['numero_telefono'] ?? '')), trim((string) ($d['correo_electronico'] ?? '')), $monto, $cuotas, (int) !empty($d['desea_codeudor']), trim((string) ($d['tipo_codeudor'] ?? '')), $id]);
-        Logger::log('editar', 'creditos', $actor['id'] ?? null, "Datos básicos solicitud #$id");
+            "UPDATE credito_solicitudes SET tipo_solicitante=?, nombre_solicitante=?, numero_identificacion=?, numero_telefono=?, correo_electronico=?, monto_deseado=?, numero_cuotas_deseadas=?, tasa_interes_id=?, desea_codeudor=?, tipo_codeudor=?, fecha_actualizacion=NOW() WHERE id=?"
+        )->execute([$tipo, $nombre, $identificacion, $telefono, $correo, $monto, $cuotas, $lineaId > 0 ? $lineaId : null, $desear, $tipoCodeudor, $id]);
+        Logger::log('editar', 'creditos', $actor['id'] ?? null, "Datos de creación solicitud #$id");
     }
 
     public function aprobar(int $id, array $d, ?array $actor = null): void
@@ -395,17 +434,88 @@ final class CreditoService
         $d = $this->planDatos($solicitudId, $opts);
         $nombre = $s['nombre_solicitante'] ?? '';
         require_once dirname(__DIR__, 2) . '/utils/vendor/tcpdf/tcpdf.php';
-        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetMargins(8, 10, 8); $pdf->AddPage();
-        $pdf->SetFont('helvetica', 'B', 14); $pdf->Cell(0, 7, 'PLAN DE PAGOS — Solicitud #' . $s['numero_solicitud'], 0, 1, 'C');
-        $pdf->SetFont('helvetica', '', 9); $pdf->Ln(3);
-        $pdf->Cell(0, 5, 'Asociado: ' . $nombre . '  ·  Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
-        $pdf->Cell(0, 5, 'Monto: $' . number_format($d['plan']['total_capital'] ?? 0) . '  ·  Cuota fija: $' . number_format($d['cuota_fija'] ?? 0) . ' (+$65000 aportes)', 0, 1);
-        $pdf->Ln(2);
-        $pdf->SetFont('helvetica', 'B', 9); $pdf->Cell(14, 6, 'N°', 1, 0, 'C'); $pdf->Cell(24, 6, 'FECHA', 1, 0, 'C'); $pdf->Cell(30, 6, 'SALDO INICIAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'INTERÉS', 1, 0, 'R'); $pdf->Cell(28, 6, 'SEGURO', 1, 0, 'R'); $pdf->Cell(34, 6, 'ABONO CAPITAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'CUOTA', 1, 0, 'R'); $pdf->Cell(28, 6, 'APORTES', 1, 0, 'R'); $pdf->Cell(34, 6, 'CUOTA TOTAL', 1, 0, 'R'); $pdf->Cell(30, 6, 'SALDO FINAL', 1, 1, 'R');
-        $pdf->SetFont('helvetica', '', 8); foreach (($d['plan']['tabla'] ?? []) as $c) {
-            $pdf->Cell(14, 5, $c['cuota'], 1, 0, 'C'); $pdf->Cell(24, 5, $c['fecha_pago'], 1, 0, 'C'); $pdf->Cell(30, 5, number_format($c['saldo_inicial']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['interes']), 1, 0, 'R'); $pdf->Cell(28, 5, number_format($c['seguro']), 1, 0, 'R'); $pdf->Cell(34, 5, number_format($c['abono_capital']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['cuota_fija']), 1, 0, 'R'); $pdf->Cell(28, 5, number_format($c['aportes']), 1, 0, 'R'); $pdf->Cell(34, 5, number_format($c['cuota_total']), 1, 0, 'R'); $pdf->Cell(30, 5, number_format($c['saldo_final']), 1, 1, 'R');
+        $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+        $pdf->SetMargins(6, 6, 6);
+        $pdf->SetAutoPageBreak(false, 0);
+        $pdf->AddPage();
+
+        // Encabezado institucional: logos de Multi y de la cooperativa.
+        $root = dirname(__DIR__, 2);
+        $logoMulti = $root . '/assets/img/logo.png';
+        $logoCoop  = $root . '/assets/img/logo_coomultiunion.png';
+        $logoMultiJpg = $root . '/assets/img/logo_pdf.jpg';
+        $logoCoopJpg  = $root . '/assets/img/logo_coomultiunion_pdf.jpg';
+        // TCPDF necesita GD o Imagick para PNG con canal alfa; si no hay,
+        // se usa una versión JPEG aplanada sobre blanco (sin alpha).
+        $puedeImagen = extension_loaded('gd') || extension_loaded('imagick');
+        if ($puedeImagen && is_file($logoMulti)) {
+            $pdf->Image($logoMulti, 6, 5, 14, 0, 'PNG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        } elseif (is_file($logoMultiJpg)) {
+            $pdf->Image($logoMultiJpg, 6, 5, 14, 0, 'JPG', '', 'T', true, 300, '', false, false, 0, false, false, false);
         }
+        if ($puedeImagen && is_file($logoCoop)) {
+            $pdf->Image($logoCoop, 180, 5, 24, 0, 'PNG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        } elseif (is_file($logoCoopJpg)) {
+            $pdf->Image($logoCoopJpg, 180, 5, 24, 0, 'JPG', '', 'T', true, 300, '', false, false, 0, false, false, false);
+        }
+
+        $pdf->SetY(7);
+        $pdf->SetFont('helvetica', 'B', 13);
+        $pdf->Cell(0, 6, 'PLAN DE PAGOS', 0, 1, 'C');
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->Cell(0, 4, 'Solicitud #' . $s['numero_solicitud'], 0, 1, 'C');
+
+        $pdf->SetY(18);
+        $pdf->SetFont('helvetica', '', 7.5);
+        $pdf->Cell(0, 4, 'Asociado: ' . $nombre, 0, 1);
+        $pdf->Cell(0, 4, 'Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
+        $pdf->Cell(0, 4, 'Monto: $' . number_format((float) ($d['plan']['total_capital'] ?? 0)) . '  ·  Cuota fija: $' . number_format((float) ($d['cuota_fija'] ?? 0)) . ' (+$65.000 aportes)', 0, 1);
+        $pdf->Cell(0, 4, 'Fecha de generación: ' . date('d/m/Y'), 0, 1);
+
+        // Tabla compacta: ancho útil 198 mm. El alto de fila se calcula para
+        // que todos los planes (hasta 72 cuotas) quepan en una sola página.
+        $tabla = $d['plan']['tabla'] ?? [];
+        $totalCuotas = count($tabla);
+        $rowH = min(4.2, max(2.5, 217 / max(1, $totalCuotas)));
+        $fontSize = $rowH >= 3.8 ? 6.2 : ($rowH >= 3.2 ? 5.9 : 5.4);
+
+        $pdf->SetY(34);
+        $pdf->SetFont('helvetica', 'B', 5.2);
+        $headers = ['N°', 'FECHA', 'SALDO INICIAL', 'INTERÉS', 'SEGURO', 'ABONO CAPITAL', 'CUOTA', 'APORTES', 'CUOTA TOTAL', 'SALDO FINAL'];
+        $widths = [9, 18, 23, 20, 17, 26, 21, 19, 23, 22];
+        foreach ($headers as $i => $h) {
+            $align = $i <= 1 ? 'C' : 'R';
+            $pdf->Cell($widths[$i], 5, $h, 1, 0, $align);
+        }
+        $pdf->Ln();
+
+        $pdf->SetFont('helvetica', '', $fontSize);
+        foreach ($tabla as $c) {
+            $pdf->Cell(9, $rowH, $c['cuota'], 1, 0, 'C');
+            $pdf->Cell(18, $rowH, $c['fecha_pago'], 1, 0, 'C');
+            $pdf->Cell(23, $rowH, number_format((float) $c['saldo_inicial']), 1, 0, 'R');
+            $pdf->Cell(20, $rowH, number_format((float) $c['interes']), 1, 0, 'R');
+            $pdf->Cell(17, $rowH, number_format((float) $c['seguro']), 1, 0, 'R');
+            $pdf->Cell(26, $rowH, number_format((float) $c['abono_capital']), 1, 0, 'R');
+            $pdf->Cell(21, $rowH, number_format((float) $c['cuota_fija']), 1, 0, 'R');
+            $pdf->Cell(19, $rowH, number_format((float) $c['aportes']), 1, 0, 'R');
+            $pdf->Cell(23, $rowH, number_format((float) $c['cuota_total']), 1, 0, 'R');
+            $pdf->Cell(22, $rowH, number_format((float) $c['saldo_final']), 1, 0, 'R');
+            $pdf->Ln();
+        }
+
+        // Firma del asociado, inmediatamente debajo de la última cuota.
+        $pdf->SetY($pdf->GetY() + 4);
+        $pdf->SetFont('helvetica', 'B', 8);
+        $pdf->Cell(60, 4, 'Firma del asociado', 0, 1);
+        $pdf->Ln(13);
+        $pdf->Cell(70, 1, '', 'T', 1);
+        $pdf->Ln(3);
+        $pdf->SetFont('helvetica', '', 7.5);
+        $pdf->Cell(0, 4, 'Nombre: ' . $nombre, 0, 1);
+        $pdf->Cell(0, 4, 'Cédula: ' . ($s['cedula_asociado'] ?? ''), 0, 1);
+        $pdf->Cell(0, 4, 'Fecha: ' . date('d/m/Y'), 0, 1);
+
         if (ob_get_level()) ob_end_clean();
         $pdf->Output('plan_pagos_' . $s['numero_solicitud'] . '.pdf', 'D');
         exit;

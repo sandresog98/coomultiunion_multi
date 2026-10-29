@@ -125,8 +125,7 @@ function dur(seg){
   var h = Math.floor(m/60); m = m%60;
   return h+' h '+(m?m+' min':'');
 }
-async function api(p){const r=await fetch(API+p);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 // ── Ordenamiento ──
 document.querySelectorAll('.sortable').forEach(th=>{
   th.addEventListener('click',()=>{

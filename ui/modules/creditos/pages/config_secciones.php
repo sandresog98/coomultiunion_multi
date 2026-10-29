@@ -180,36 +180,28 @@ let editSeccionId=null, editCampoId=null, editDocId=null, curSec=0, SC=[], curIt
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40);}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function visArr(elStaff,elCx){const v=[];if(elStaff.checked)v.push('staff');if(elCx.checked)v.push('cx');return v;}
 function parseArr(v){if(Array.isArray(v))return v;if(typeof v==='string'&&v.trim()){try{const j=JSON.parse(v);if(Array.isArray(j))return j;}catch(e){}return v.replace(/[\[\]"]/g,'').split(',').map(s=>s.trim()).filter(Boolean);}return [];}
 
 /* ========== VISTA LISTA DE SECCIONES ========== */
 async function cargarSecciones(){
   try{
-    SC=await api('creditos/config?ent=secciones');
+    SC=await api('creditos/config?ent=secciones&conteos=1');
     document.getElementById('infoSecciones').textContent=`${SC.length} secciones`;
     document.getElementById('tbodySecciones').innerHTML=SC.map(s=>`
       <tr>
         <td><span class="fw-semibold">${esc(s.nombre)}</span>${s.estado_activo?'':' <span class="badge text-bg-secondary">inactiva</span>'}</td>
         <td>${esc(s.ocasion||s.codigo)}</td>
-        <td class="text-center" id="cntc_${s.id}">—</td>
-        <td class="text-center" id="cntd_${s.id}">—</td>
+        <td class="text-center">${Number(s.campos_count||0)}</td>
+        <td class="text-center">${Number(s.documentos_count||0)}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-brand me-1" onclick="verSeccion(${s.id})"><i class="fas fa-list me-1"></i>Detalle</button>
           ${CAN_EDITAR?`<button class="btn btn-sm btn-outline-secondary me-1" onclick='abrirSeccion(${JSON.stringify(s)})'><i class="fas fa-edit"></i></button>`:''}
           ${CAN_ELIM?`<button class="btn btn-sm btn-outline-danger" onclick="delSeccion(${s.id})"><i class="fas fa-trash"></i></button>`:''}
         </td>
       </tr>`).join('')||'<tr><td colspan="5" class="text-center text-muted">Sin secciones</td></tr>';
-    for(const s of SC){cargarContadores(s.id);}
   }catch(e){alert(e.message);}
-}
-async function cargarContadores(id){
-  try{
-    const c=await api('creditos/config?ent=campos&seccion_id='+id),d=await api('creditos/config?ent=documentos&seccion_id='+id);
-    document.getElementById('cntc_'+id).textContent=c.length;
-    document.getElementById('cntd_'+id).textContent=d.length;
-  }catch(e){}
 }
 
 /* ========== DETALLE (campos + docs en una sola lista editable) ========== */
@@ -224,8 +216,10 @@ function verSeccion(id){
 function volverLista(){document.getElementById('vistaDetalle').classList.add('d-none');document.getElementById('vistaLista').classList.remove('d-none');}
 async function cargarDetalle(){
   try{
-    const campos=await api('creditos/config?ent=campos&seccion_id='+curSec);
-    const docs=await api('creditos/config?ent=documentos&seccion_id='+curSec);
+    const [campos,docs]=await Promise.all([
+      api('creditos/config?ent=campos&seccion_id='+curSec),
+      api('creditos/config?ent=documentos&seccion_id='+curSec)
+    ]);
     let items=docs.map(x=>({kind:'doc',obj:x,orden:x.orden||0}));
     items=items.concat(campos.map(c=>({kind:'campo',obj:c,orden:c.orden||0,plus:1})));
     items.sort((a,b)=>(a.orden-b.orden)||(a.kind===b.kind?0:(a.kind==='doc'?-1:1)));

@@ -29,6 +29,7 @@ solicitudes migradas (origen_tabla='credito_docs_solicitudes') y conserva las
 nuevas creadas en v2.
 """
 import argparse
+from collections import defaultdict
 import hashlib
 import os
 import re
@@ -44,7 +45,7 @@ except ImportError:
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 BLOCKS = ["usuarios", "asociados", "productos", "asignaciones", "movimientos",
-          "pagos", "cobranza", "creditos", "convenios", "tienda"]
+          "pagos", "cargas", "cobranza", "creditos", "fondo", "convenios", "tienda"]
 
 # Cobranza: etiquetas legacy -> codigo v2
 COBRANZA_ESTADO = {
@@ -174,8 +175,15 @@ def block_usuarios(src, dst, args):
     n = insert_many(dc, "usuarios",
                     ["id", "usuario", "password", "nombre_completo", "email", "rol", "estado_activo",
                      "password_is_one_use", "password_changed_at", "fecha_creacion", "fecha_actualizacion"], rows)
+    # Historial de contraseñas (evita reutilización de claves).
+    if args.reset:
+        truncate(dc, "password_history")
+    sc.execute("SELECT id,user_id,password_hash,created_at FROM password_history")
+    ph = [(r["id"], r["user_id"], r["password_hash"], r["created_at"]) for r in fetch_dicts(sc)]
+    n_ph = insert_many(dc, "password_history",
+                       ["id", "user_id", "password_hash", "created_at"], ph)
     dst.commit()
-    return f"usuarios: {n}"
+    return f"usuarios: {n} (password_history: {n_ph})"
 
 
 def block_asociados(src, dst, args):
@@ -245,10 +253,11 @@ def block_asignaciones(src, dst, args):
         clausula_map = {1: cl}
 
     rows = []
-    sc.execute("""SELECT id,cedula,producto_id,dia_pago,estado_activo,fecha_creacion,fecha_actualizacion
+    sc.execute("""SELECT id,cedula,producto_id,dia_pago,monto_pago,estado_activo,fecha_creacion,fecha_actualizacion
                   FROM control_asignacion_asociado_producto ORDER BY id""")
     for r in fetch_dicts(sc):
-        rows.append((r["id"], r["cedula"], r["producto_id"], 0, None,
+        # monto_pago es el valor mensual legacy; antes se insertaba 0 por error.
+        rows.append((r["id"], r["cedula"], r["producto_id"], r["monto_pago"], None,
                      r.get("dia_pago"), None, None,
                      r["estado_activo"], None, r["fecha_creacion"], r["fecha_actualizacion"]))
     n1 = insert_many(dc, "asociados_productos",
@@ -613,6 +622,129 @@ def block_creditos(src, dst, args):
             f"docs {n_docs} (archivos copiados {files_ok}, faltantes {files_missing})")
 
 
+def block_cargas(src, dst, args):
+    """Historial de cargas legacy -> sifone_cargas_archivos (auditoria)."""
+    sc, dc = src.cursor(), dst.cursor()
+    if args.reset:
+        truncate(dc, "sifone_cargas_archivos")
+    rows = []
+    for tabla in ("control_cargas", "control_cargas_php"):
+        sc.execute(f"""SELECT tipo,archivo_ruta,estado,mensaje_log,usuario_id,
+                              fecha_creacion,fecha_actualizacion FROM {tabla} ORDER BY id""")
+        for r in fetch_dicts(sc):
+            rows.append((r["tipo"], r["archivo_ruta"], r.get("estado"), r.get("mensaje_log"),
+                         None, r.get("usuario_id"), r.get("fecha_creacion"),
+                         r.get("fecha_actualizacion")))
+    n = insert_many(dc, "sifone_cargas_archivos",
+                    ["tipo", "archivo_ruta", "estado", "mensaje_log", "registros", "usuario_id",
+                     "fecha_creacion", "fecha_actualizacion"], rows)
+    dst.commit()
+    return f"sifone_cargas_archivos: {n}"
+
+
+def block_fondo(src, dst, args):
+    """Fondo de Bienestar + retiro de aportes + calificaciones de Fondo.
+
+    El legacy tenia tablas separadas. En v2 todo entra al motor unico:
+    `solicitudes` + `solicitudes_det_fondo` / `solicitudes_det_retiro_aporte`.
+    Las redenciones historicas se copian a `fondo_bienestar_redenciones`, fuente
+    de bloqueo/frecuencia de FondoBienestarValidacion.
+    """
+    sc, dc = src.cursor(), dst.cursor()
+    if args.reset:
+        dc.execute("""DELETE FROM solicitudes_calificaciones WHERE solicitud_id IN
+                      (SELECT id FROM solicitudes WHERE origen_tabla='fondo_bienestar_solicitudes')""")
+        dc.execute("""DELETE FROM solicitudes_det_fondo WHERE solicitud_id IN
+                      (SELECT id FROM solicitudes WHERE origen_tabla='fondo_bienestar_solicitudes')""")
+        dc.execute("""DELETE FROM solicitudes_det_retiro_aporte WHERE solicitud_id IN
+                      (SELECT id FROM solicitudes WHERE origen_tabla='retiro_aporte_solicitudes')""")
+        dc.execute("""DELETE FROM solicitudes WHERE origen_tabla IN
+                      ('fondo_bienestar_solicitudes','retiro_aporte_solicitudes')""")
+        truncate(dc, "fondo_bienestar_redenciones")
+        dst.commit()
+
+    sol_cols = ["id", "numero_radicado", "tipo_codigo", "fase", "estado_codigo",
+                "cedula_solicitante", "solicitante_tipo", "responsable_id", "asignado_por",
+                "fecha_asignacion", "resultado", "respondido_por", "comentario_respuesta",
+                "ruta_archivo_respuesta", "fecha_respuesta", "origen", "creado_por",
+                "fecha_creacion", "fecha_actualizacion", "origen_tabla", "origen_id", "datos_legacy"]
+    fase_fondo = {"pendiente": "CREADA", "asignado": "EN_GESTION",
+                  "aprobada": "RESUELTA_POSITIVA", "rechazada": "RESUELTA_NEGATIVA"}
+    fase_retiro = {"pendiente": "CREADA", "desembolsado": "RESUELTA_POSITIVA",
+                   "rechazada": "RESUELTA_NEGATIVA"}
+
+    sc.execute("""SELECT id,cedula_asociado,convenio_id,estado,datos_extra,ruta_pdf_obligatorio,
+                         opcion_elegida,fecha_uso,bloqueado_hasta,respondido_por,comentarios_respuesta,
+                         fecha_respuesta,responsable_id,fecha_asignacion,asignado_por,
+                         fecha_creacion,fecha_actualizacion,ruta_archivo_respuesta
+                  FROM fondo_bienestar_solicitudes ORDER BY id""")
+    fondo = fetch_dicts(sc)
+    rows = []
+    for r in fondo:
+        estado = r.get("estado") or "pendiente"
+        resultado = estado if estado in ("aprobada", "rechazada") else None
+        rows.append((r["id"], f"FB-LEG-{r['id']}", "fondo", fase_fondo.get(estado, "CREADA"),
+                     estado, r["cedula_asociado"], "asociado", r.get("responsable_id"),
+                     r.get("asignado_por"), r.get("fecha_asignacion"), resultado,
+                     r.get("respondido_por"), r.get("comentarios_respuesta"),
+                     r.get("ruta_archivo_respuesta"), r.get("fecha_respuesta"), "legacy", None,
+                     r.get("fecha_creacion"), r.get("fecha_actualizacion"),
+                     "fondo_bienestar_solicitudes", str(r["id"]), r.get("datos_extra")))
+    n_f = insert_many(dc, "solicitudes", sol_cols, rows)
+
+    rows = [(r["id"], r["convenio_id"], r.get("opcion_elegida"), r.get("ruta_pdf_obligatorio"),
+             None, r.get("datos_extra"), r.get("fecha_uso"), r.get("bloqueado_hasta"))
+            for r in fondo]
+    n_fd = insert_many(dc, "solicitudes_det_fondo",
+                       ["solicitud_id", "convenio_id", "opcion_elegida", "ruta_pdf_obligatorio",
+                        "observaciones", "dato_extra", "fecha_uso", "bloqueado_hasta"], rows)
+
+    sc.execute("""SELECT id,cedula_asociado,convenio_id,solicitud_id,fecha_redencion,
+                         bloqueado_hasta,fecha_creacion FROM fondo_bienestar_redenciones ORDER BY id""")
+    rows = [(r["id"], r["cedula_asociado"], r["convenio_id"], r.get("solicitud_id"),
+             r["fecha_redencion"], r.get("bloqueado_hasta"), r.get("fecha_creacion"))
+            for r in fetch_dicts(sc)]
+    n_r = insert_many(dc, "fondo_bienestar_redenciones",
+                      ["id", "cedula_asociado", "convenio_id", "solicitud_id", "fecha_redencion",
+                       "bloqueado_hasta", "fecha_creacion"], rows)
+
+    sc.execute("""SELECT id,cedula_asociado,tipo,monto_solicitado,fecha_solicitud,
+                         fecha_estimada_desembolso,ruta_pdf_retiro,ruta_pdf_certificado,estado,
+                         fecha_desembolso,desembolsado_por,comentarios,fecha_creacion,fecha_actualizacion
+                  FROM retiro_aporte_solicitudes ORDER BY id""")
+    retiros = fetch_dicts(sc)
+    rows = []
+    for r in retiros:
+        sid = 1000 + r["id"]  # evita colision con ids de Fondo
+        estado = r.get("estado") or "pendiente"
+        resultado = estado if estado in ("desembolsado", "rechazada") else None
+        rows.append((sid, f"RET-LEG-{r['id']}", "retiro_aporte", fase_retiro.get(estado, "CREADA"),
+                     estado, r["cedula_asociado"], "asociado", None, None, None, resultado,
+                     r.get("desembolsado_por"), r.get("comentarios"), None, r.get("fecha_desembolso"),
+                     "legacy", None, r.get("fecha_creacion"), r.get("fecha_actualizacion"),
+                     "retiro_aporte_solicitudes", str(r["id"]), None))
+    n_t = insert_many(dc, "solicitudes", sol_cols, rows)
+
+    rows = [(1000 + r["id"], r["tipo"], r.get("monto_solicitado"), r.get("ruta_pdf_retiro"),
+             r.get("ruta_pdf_certificado"), r.get("fecha_estimada_desembolso")) for r in retiros]
+    n_td = insert_many(dc, "solicitudes_det_retiro_aporte",
+                       ["solicitud_id", "tipo", "monto_solicitado", "ruta_pdf_retiro",
+                        "ruta_pdf_certificado", "fecha_estimada_desembolso"], rows)
+
+    # Calificaciones de Fondo. PQRS/tickets/credito no se migran (fuera de alcance).
+    sc.execute("""SELECT solicitud_id,puntuacion,comentarios,token_acceso,fecha_calificacion,
+                         fecha_creacion FROM control_calificaciones
+                  WHERE tipo_solicitud='fondo_bienestar' ORDER BY id""")
+    rows = [(r["solicitud_id"], r.get("puntuacion"), r.get("comentarios"), r["token_acceso"],
+             r.get("fecha_calificacion"), r.get("fecha_creacion")) for r in fetch_dicts(sc)]
+    n_c = insert_many(dc, "solicitudes_calificaciones",
+                      ["solicitud_id", "puntuacion", "comentarios", "token_acceso",
+                       "fecha_calificacion", "fecha_creacion"], rows)
+    dst.commit()
+    return (f"fondo: solicitudes {n_f}+{n_t}, detalles {n_fd}+{n_td}, "
+            f"redenciones {n_r}, calificaciones {n_c}")
+
+
 def block_convenios(src, dst, args):
     sc, dc = src.cursor(), dst.cursor()
     if args.reset:
@@ -694,8 +826,10 @@ def block_convenios(src, dst, args):
 def block_tienda(src, dst, args):
     sc, dc = src.cursor(), dst.cursor()
     if args.reset:
-        for t in ("tienda_promociones", "tienda_productos", "tienda_marcas", "tienda_categorias",
-                  "tienda_clientes"):
+        for t in ("tienda_reversiones", "tienda_stock", "tienda_venta_pagos",
+                  "tienda_venta_detalles", "tienda_ventas", "tienda_compra_detalles",
+                  "tienda_compras", "tienda_promociones", "tienda_productos", "tienda_marcas",
+                  "tienda_categorias", "tienda_clientes"):
             truncate(dc, t)
 
     sc.execute("SELECT id,nombre,estado_activo,fecha_creacion,fecha_actualizacion FROM tienda_categoria")
@@ -718,7 +852,8 @@ def block_tienda(src, dst, args):
     rows = []
     for r in fetch_dicts(sc):
         rows.append((r["id"], r["categoria_id"], r["marca_id"], r["nombre"], r.get("descripcion"),
-                     None, r.get("precio_compra_aprox"), r.get("precio_venta_aprox"),
+                     (os.path.basename(r["foto_url"]) if r.get("foto_url") else None),
+                     r.get("precio_compra_aprox"), r.get("precio_venta_aprox"),
                      r.get("estado_activo"), r.get("agotado") or 0, None,
                      r.get("fecha_creacion"), r.get("fecha_actualizacion")))
     n_prod = insert_many(dc, "tienda_productos",
@@ -741,8 +876,97 @@ def block_tienda(src, dst, args):
     n_prom = insert_many(dc, "tienda_promociones",
                          ["id", "producto_id", "precio_descuento", "fecha_inicio", "fecha_fin",
                           "estado_activo", "creado_por", "fecha_creacion", "fecha_actualizacion"], rows)
+
+    # --- compras / ventas / inventario (historico) ---
+    sc.execute("""SELECT id,usuario_id,observacion,fecha_compra,fecha_creacion,fecha_actualizacion
+                  FROM tienda_compra ORDER BY id""")
+    rows = [(r["id"], r.get("usuario_id"), r.get("observacion"), r.get("fecha_compra"),
+             r.get("fecha_creacion"), r.get("fecha_actualizacion")) for r in fetch_dicts(sc)]
+    n_com = insert_many(dc, "tienda_compras",
+                        ["id", "usuario_id", "observacion", "fecha_compra", "fecha_creacion",
+                         "fecha_actualizacion"], rows)
+
+    sc.execute("""SELECT id,compra_id,producto_id,cantidad,precio_compra,precio_venta_sugerido
+                  FROM tienda_compra_detalle ORDER BY id""")
+    rows = [(r["id"], r["compra_id"], r["producto_id"], r["cantidad"], r["precio_compra"],
+             r["precio_venta_sugerido"]) for r in fetch_dicts(sc)]
+    n_comd = insert_many(dc, "tienda_compra_detalles",
+                         ["id", "compra_id", "producto_id", "cantidad", "precio_compra",
+                          "precio_venta_sugerido"], rows)
+
+    sc.execute("""SELECT id,tipo_cliente,asociado_cedula,cliente_id,usuario_id,total,ceco,
+                         fecha_venta,fecha_creacion FROM tienda_venta ORDER BY id""")
+    rows = [(r["id"], r["tipo_cliente"], r.get("asociado_cedula"), r.get("cliente_id"),
+             r.get("usuario_id"), r["total"], r.get("ceco"), r.get("fecha_venta"),
+             r.get("fecha_creacion")) for r in fetch_dicts(sc)]
+    n_ven = insert_many(dc, "tienda_ventas",
+                        ["id", "tipo_cliente", "cedula", "cliente_id", "usuario_id", "total",
+                         "ceco", "fecha_venta", "fecha_creacion"], rows)
+
+    sc.execute("""SELECT id,venta_id,producto_id,cantidad,precio_unitario,subtotal,inventario_id
+                  FROM tienda_venta_detalle ORDER BY id""")
+    vdet = fetch_dicts(sc)
+    rows = [(r["id"], r["venta_id"], r["producto_id"], r["cantidad"], r["precio_unitario"],
+             r["subtotal"]) for r in vdet]
+    n_vend = insert_many(dc, "tienda_venta_detalles",
+                         ["id", "venta_id", "producto_id", "cantidad", "precio_unitario",
+                          "subtotal"], rows)
+
+    sc.execute("""SELECT id,venta_id,tipo,monto,numero_credito_sifone FROM tienda_venta_pago
+                  ORDER BY id""")
+    rows = [(r["id"], r["venta_id"], r["tipo"], r["monto"], r.get("numero_credito_sifone"))
+            for r in fetch_dicts(sc)]
+    n_pago = insert_many(dc, "tienda_venta_pagos",
+                         ["id", "venta_id", "tipo", "monto", "numero_credito_sifone"], rows)
+
+    # Inventario -> stock. El estado se deriva del detalle de venta (mas fiable
+    # que el flag legacy `vendido`, que tiene filas desactualizadas).
+    inv_to_detail = {r["inventario_id"]: r["id"] for r in vdet if r.get("inventario_id")}
+    sc.execute("""SELECT id,compra_detalle_id,producto_id,precio_compra,precio_venta,
+                         fecha_creacion FROM tienda_inventario ORDER BY id""")
+    inv = fetch_dicts(sc)
+    rows = []
+    for r in inv:
+        rows.append((r["id"], r["compra_detalle_id"], r["producto_id"], r["precio_compra"],
+                     r.get("precio_venta"), None,
+                     "vendido" if r["id"] in inv_to_detail else "disponible",
+                     inv_to_detail.get(r["id"]), r.get("fecha_creacion"), None))
+    n_stock = insert_many(dc, "tienda_stock",
+                          ["id", "compra_detalle_id", "producto_id", "precio_compra",
+                           "precio_venta", "numero_serie", "estado", "venta_detalle_id",
+                           "fecha_creacion", "fecha_actualizacion"], rows)
+
+    # IMEI -> numero_serie (misma compra_detalle_id, por orden de id).
+    inv_by = defaultdict(list)
+    for r in inv:
+        inv_by[r["compra_detalle_id"]].append(r["id"])
+    sc.execute("SELECT id,compra_detalle_id,imei FROM tienda_compra_imei ORDER BY id")
+    imei_by = defaultdict(list)
+    for r in fetch_dicts(sc):
+        imei_by[r["compra_detalle_id"]].append(r["imei"])
+    n_imei = 0
+    for cid, inv_ids in inv_by.items():
+        for stock_id, imei in zip(sorted(inv_ids), imei_by.get(cid, [])):
+            dc.execute("UPDATE tienda_stock SET numero_serie=%s WHERE id=%s", (imei, stock_id))
+            n_imei += 1
+
+    # Reversiones: si puede_revender, el item vuelve a disponible.
+    sc.execute("""SELECT id,venta_detalle_id,motivo,puede_revender,usuario_id,fecha_creacion
+                  FROM tienda_reversion ORDER BY id""")
+    rev = fetch_dicts(sc)
+    rows = [(r["id"], r["venta_detalle_id"], r.get("motivo"), r.get("usuario_id"),
+             r.get("fecha_creacion")) for r in rev]
+    n_rev = insert_many(dc, "tienda_reversiones",
+                        ["id", "venta_detalle_id", "motivo", "usuario_id", "fecha_creacion"], rows)
+    for r in rev:
+        if int(r.get("puede_revender") or 0) == 1:
+            dc.execute("""UPDATE tienda_stock SET estado='disponible', venta_detalle_id=NULL
+                          WHERE venta_detalle_id=%s""", (r["venta_detalle_id"],))
+
     dst.commit()
-    return f"tienda: cat {n_cat}, marcas {n_mar}, productos {n_prod}, clientes {n_cli}, promos {n_prom}"
+    return (f"tienda: cat {n_cat}, marcas {n_mar}, productos {n_prod}, clientes {n_cli}, "
+            f"promos {n_prom}; compras {n_com}+{n_comd}, ventas {n_ven}+{n_vend}, "
+            f"pagos {n_pago}, stock {n_stock} (imei {n_imei}), reversiones {n_rev}")
 
 
 HANDLERS = {
@@ -752,8 +976,10 @@ HANDLERS = {
     "asignaciones": block_asignaciones,
     "movimientos": block_movimientos,
     "pagos": block_pagos,
+    "cargas": block_cargas,
     "cobranza": block_cobranza,
     "creditos": block_creditos,
+    "fondo": block_fondo,
     "convenios": block_convenios,
     "tienda": block_tienda,
 }

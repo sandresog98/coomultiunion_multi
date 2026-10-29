@@ -15,33 +15,60 @@ final class TransaccionService
         $this->db = $db ?? db();
     }
 
-    /** Lista transacciones de un asociado con paginación. */
-    public function listar(string $cedula, int $limit = 20, int $offset = 0): array
+    /** Lista transacciones de un asociado con paginación y filtros opcionales. */
+    public function listar(string $cedula, int $limit = 20, int $offset = 0, string $origen = '', string $fechaDesde = '', string $fechaHasta = ''): array
     {
-        $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones WHERE cedula = ?");
-        $st->execute([$cedula]);
+        $where = ['cedula = ?'];
+        $params = [$cedula];
+        if ($origen !== '' && in_array($origen, ['pse', 'confiar', 'boleta'], true)) {
+            $where[] = 'origen = ?';
+            $params[] = $origen;
+        }
+        if ($fechaDesde !== '') { $where[] = 'fecha_creacion >= ?'; $params[] = strlen($fechaDesde) === 10 ? $fechaDesde . ' 00:00:00' : $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = 'fecha_creacion <= ?'; $params[] = strlen($fechaHasta) === 10 ? $fechaHasta . ' 23:59:59' : $fechaHasta; }
+        $w = implode(' AND ', $where);
+
+        $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones WHERE $w");
+        $st->execute($params);
         $total = (int) $st->fetchColumn();
 
         $st = $this->db->prepare(
-            "SELECT * FROM transacciones WHERE cedula = ? ORDER BY fecha_creacion DESC LIMIT ? OFFSET ?"
+            "SELECT * FROM transacciones WHERE $w ORDER BY fecha_creacion DESC LIMIT ? OFFSET ?"
         );
-        $st->bindValue(1, $cedula);
-        $st->bindValue(2, $limit, PDO::PARAM_INT);
-        $st->bindValue(3, $offset, PDO::PARAM_INT);
+        foreach ($params as $i => $v) { $st->bindValue($i + 1, $v); }
+        $st->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+        $st->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
         $st->execute();
         $rows = $st->fetchAll();
 
-        // Adjuntar detalles a cada transacción
-        foreach ($rows as &$tx) {
-            $stD = $this->db->prepare(
-                "SELECT d.*, p.nombre AS producto_nombre
-                 FROM transacciones_detalle d
-                 LEFT JOIN productos p ON p.id = d.producto_id
-                 WHERE d.transaccion_id = ? ORDER BY d.id"
-            );
-            $stD->execute([$tx['id']]);
-            $tx['detalles'] = $stD->fetchAll();
+        if (!$rows) {
+            return ['rows' => [], 'total' => $total, 'limit' => $limit, 'offset' => $offset];
         }
+
+        // Detalles en una sola consulta (evita N+1 por transacción).
+        $ids = array_map(static fn(array $tx): int => (int) $tx['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stD = $this->db->prepare(
+            "SELECT d.*, p.nombre AS producto_nombre
+             FROM transacciones_detalle d
+             LEFT JOIN productos p ON p.id = d.producto_id
+             WHERE d.transaccion_id IN ($in)
+             ORDER BY d.id"
+        );
+        $stD->execute($ids);
+        $detalles = [];
+        foreach ($stD->fetchAll() as $det) {
+            $detalles[(int) $det['transaccion_id']][] = $det;
+        }
+
+        foreach ($rows as &$tx) {
+            $tx['detalles'] = $detalles[(int) $tx['id']] ?? [];
+            $tx['valor_asignado'] = 0.0;
+            foreach ($tx['detalles'] as $det) {
+                $tx['valor_asignado'] += (float) ($det['valor_asignado'] ?? 0);
+            }
+        }
+        unset($tx);
 
         return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
     }
@@ -90,8 +117,24 @@ final class TransaccionService
         $detalles = $data['detalles'] ?? [];
         if (empty($detalles)) throw new DomainException('Debe asignar al menos un rubro.');
 
+        $sumaAsignada = 0.0;
+        foreach ($detalles as $d) {
+            $sumaAsignada += (float) ($d['valor_asignado'] ?? 0);
+        }
+        // Validación estricta solo cuando la transacción viene ligada a un pago
+        // (flujo crear.php). El wizard antiguo no envía pse_id/confiar_id.
+        $pagoId = trim((string) ($data[$origen . '_id'] ?? ''));
+        $validarPago = in_array($origen, ['pse', 'confiar'], true) && $pagoId !== '';
+        if ($validarPago && abs($sumaAsignada - $valorTotal) > 0.01) {
+            throw new DomainException('El valor total no coincide con la suma de los rubros asignados.');
+        }
+
         if (!$txExterna) $this->db->beginTransaction();
         try {
+            if ($validarPago) {
+                $this->validarPagoDisponible($origen, $pagoId, $valorTotal);
+            }
+
             $st = $this->db->prepare(
                 "INSERT INTO transacciones (cedula, origen, pse_id, confiar_id, recibo_caja, valor_total, usuario_id)
                  VALUES (?,?,?,?,?,?,?)"
@@ -158,8 +201,155 @@ final class TransaccionService
         )->fetchAll();
     }
 
+    /**
+     * Lista pagos PSE y Confiar con saldo disponible, con la información del
+     * asociado ya cruzada (cédula/nombre) para el paso 1 de creación de transacciones.
+     */
+    public function listarPagosDisponiblesTodos(string $q = '', string $origen = '', int $limit = 20, int $offset = 0): array
+    {
+        $limit = max(1, min(100, $limit));
+        $offset = max(0, $offset);
+        $origen = in_array($origen, ['pse', 'confiar'], true) ? $origen : '';
+
+        $asociados = "SELECT TRIM(LEADING '0' FROM cedula) AS cedula_norm,
+                             MAX(nombre) AS nombre, MIN(cedula) AS cedula
+                      FROM sifone_asociados
+                      WHERE cedula IS NOT NULL AND cedula <> ''
+                      GROUP BY cedula_norm";
+
+        $usadoConfiar = "SELECT confiar_id, SUM(valor_total) AS usado FROM (
+                             SELECT t.id, t.confiar_id, t.valor_total
+                             FROM transacciones t
+                             WHERE t.confiar_id IS NOT NULL AND t.confiar_id <> ''
+                             UNION
+                             SELECT t.id, pc2.confiar_id, t.valor_total
+                             FROM transacciones t
+                             JOIN pagos_conciliacion pc2 ON pc2.pse_id = t.pse_id
+                             WHERE t.pse_id IS NOT NULL AND t.pse_id <> ''
+                         ) u GROUP BY confiar_id";
+
+        $pse = "SELECT
+                    'pse' AS origen,
+                    p.pse_id AS id,
+                    CAST(p.valor AS DECIMAL(15,2)) AS valor,
+                    CAST(COALESCE(txp.usado, 0) AS DECIMAL(15,2)) AS usado,
+                    CAST(p.valor - COALESCE(txp.usado, 0) AS DECIMAL(15,2)) AS restante,
+                    CAST(p.referencia_2 AS CHAR) AS cedula_pago,
+                    p.referencia_3 AS nombre_pago,
+                    sap.nombre AS asociado_nombre,
+                    sap.cedula AS asociado_cedula,
+                    CONCAT_WS(' · ', NULLIF(p.banco_originador, ''), NULLIF(p.referencia_1, '')) AS descripcion,
+                    p.fecha_resolucion AS fecha,
+                    p.estado AS estado,
+                    0 AS pse_count,
+                    0 AS pse_total,
+                    0 AS pse_cedulas_count,
+                    COALESCE(pcf.confiar_count, 0) AS confiar_count,
+                    pcf.confiar_ids AS confiar_ids,
+                    NULL AS pse_cedulas
+                FROM pagos_pse p
+                LEFT JOIN (
+                    SELECT pse_id, SUM(valor_total) AS usado
+                    FROM transacciones
+                    WHERE pse_id IS NOT NULL AND pse_id <> ''
+                    GROUP BY pse_id
+                ) txp ON txp.pse_id = p.pse_id
+                LEFT JOIN (
+                    SELECT pse_id,
+                           COUNT(*) AS confiar_count,
+                           GROUP_CONCAT(confiar_id ORDER BY confiar_id SEPARATOR ', ') AS confiar_ids
+                    FROM pagos_conciliacion
+                    GROUP BY pse_id
+                ) pcf ON pcf.pse_id = p.pse_id
+                LEFT JOIN ($asociados) sap
+                       ON sap.cedula_norm = TRIM(LEADING '0' FROM CAST(p.referencia_2 AS CHAR))
+                WHERE p.estado = 'Aprobada'
+                  AND EXISTS (SELECT 1 FROM pagos_conciliacion pc WHERE pc.pse_id = p.pse_id)
+                  AND p.valor - COALESCE(txp.usado, 0) > 0";
+
+        $confiar = "SELECT
+                        'confiar' AS origen,
+                        c.confiar_id AS id,
+                        CAST(COALESCE(c.valor_consignacion, 0) AS DECIMAL(15,2)) AS valor,
+                        CAST(COALESCE(txc.usado, 0) AS DECIMAL(15,2)) AS usado,
+                        CAST(COALESCE(c.valor_consignacion, 0) - COALESCE(txc.usado, 0) AS DECIMAL(15,2)) AS restante,
+                        CASE
+                            WHEN pco.cedula IS NOT NULL AND pco.cedula <> '' THEN CAST(pco.cedula AS CHAR)
+                            WHEN COALESCE(psx.pse_cedulas_count, 0) = 1 THEN CAST(psx.pse_cedula AS CHAR)
+                            ELSE NULL
+                        END AS cedula_pago,
+                        COALESCE(sac.nombre, sapx.nombre, pco.cedula) AS nombre_pago,
+                        COALESCE(sac.nombre, sapx.nombre) AS asociado_nombre,
+                        CASE
+                            WHEN pco.cedula IS NOT NULL AND pco.cedula <> '' THEN sac.cedula
+                            WHEN COALESCE(psx.pse_cedulas_count, 0) = 1 THEN sapx.cedula
+                            ELSE NULL
+                        END AS asociado_cedula,
+                        c.descripcion,
+                        c.fecha,
+                        COALESCE(pco.estado, 'pendiente') AS estado,
+                        COALESCE(psx.pse_count, 0) AS pse_count,
+                        CAST(COALESCE(psx.pse_total, 0) AS DECIMAL(15,2)) AS pse_total,
+                        COALESCE(psx.pse_cedulas_count, 0) AS pse_cedulas_count,
+                        0 AS confiar_count,
+                        NULL AS confiar_ids,
+                        psx.pse_cedulas
+                    FROM pagos_confiar c
+                    LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
+                    LEFT JOIN ($usadoConfiar) txc ON txc.confiar_id = c.confiar_id
+                    LEFT JOIN (
+                        SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total,
+                               COUNT(DISTINCT p.referencia_2) AS pse_cedulas_count,
+                               MIN(p.referencia_2) AS pse_cedula,
+                               GROUP_CONCAT(DISTINCT p.referencia_2 ORDER BY p.referencia_2 SEPARATOR ', ') AS pse_cedulas
+                        FROM pagos_conciliacion pc
+                        JOIN pagos_pse p ON p.pse_id = pc.pse_id
+                        GROUP BY pc.confiar_id
+                    ) psx ON psx.confiar_id = c.confiar_id
+                    LEFT JOIN ($asociados) sac
+                           ON sac.cedula_norm = TRIM(LEADING '0' FROM CAST(pco.cedula AS CHAR))
+                    LEFT JOIN ($asociados) sapx
+                           ON sapx.cedula_norm = TRIM(LEADING '0' FROM CAST(psx.pse_cedula AS CHAR))
+                    WHERE pco.estado = 'asignado'
+                      AND pco.cedula IS NOT NULL AND pco.cedula <> ''
+                      AND c.descripcion NOT LIKE '%Intereses de Ahorros%'
+                      AND c.descripcion NOT LIKE 'Reverso%'
+                      AND c.descripcion NOT LIKE '%Gravamen%'
+                      AND c.descripcion NOT LIKE 'Movimiento Saldo%'
+                      AND c.descripcion NOT LIKE 'Devoluci%Credito ACH%'
+                      AND COALESCE(c.valor_consignacion, 0) - COALESCE(txc.usado, 0) > 0";
+
+        $partes = [];
+        if ($origen !== 'confiar') { $partes[] = $pse; }
+        if ($origen !== 'pse') { $partes[] = $confiar; }
+        $union = implode(' UNION ALL ', $partes);
+
+        $where = '';
+        $params = [];
+        if ($q !== '') {
+            $where = "WHERE (u.id LIKE ? OR u.cedula_pago LIKE ? OR u.asociado_cedula LIKE ?
+                             OR u.nombre_pago LIKE ? OR u.asociado_nombre LIKE ? OR u.descripcion LIKE ?)";
+            $like = '%' . $q . '%';
+            $params = [$like, $like, $like, $like, $like, $like];
+        }
+
+        $st = $this->db->prepare("SELECT COUNT(*) FROM ($union) u $where");
+        $st->execute($params);
+        $total = (int) $st->fetchColumn();
+
+        $st = $this->db->prepare(
+            "SELECT * FROM ($union) u $where ORDER BY u.fecha DESC, u.id DESC LIMIT ? OFFSET ?"
+        );
+        foreach ($params as $i => $v) { $st->bindValue($i + 1, $v); }
+        $st->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
+        $st->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+        $st->execute();
+
+        return ['rows' => $st->fetchAll(), 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+    }
+
     /** Lista todas las transacciones con filtros y paginación. */
-    public function listarTodas(string $q = '', string $origen = '', string $fechaDesde = '', string $fechaHasta = '', int $limit = 20, int $offset = 0): array
+    public function listarTodas(string $q = '', string $origen = '', string $fechaDesde = '', string $fechaHasta = '', int $limit = 20, int $offset = 0, ?float $valorMin = null, ?float $valorMax = null, string $recibo = ''): array
     {
         $where = [];
         $params = [];
@@ -172,8 +362,14 @@ final class TransaccionService
             $where[] = "t.origen = ?";
             $params[] = $origen;
         }
-        if ($fechaDesde !== '') { $where[] = "DATE(t.fecha_creacion) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta !== '') { $where[] = "DATE(t.fecha_creacion) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde !== '') { $where[] = "t.fecha_creacion >= ?"; $params[] = strlen($fechaDesde) === 10 ? $fechaDesde . ' 00:00:00' : $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = "t.fecha_creacion <= ?"; $params[] = strlen($fechaHasta) === 10 ? $fechaHasta . ' 23:59:59' : $fechaHasta; }
+        if ($valorMin !== null) { $where[] = "t.valor_total >= ?"; $params[] = $valorMin; }
+        if ($valorMax !== null) { $where[] = "t.valor_total <= ?"; $params[] = $valorMax; }
+        if ($recibo !== '') {
+            $where[] = "t.recibo_caja LIKE ?";
+            $params[] = '%' . $recibo . '%';
+        }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $st = $this->db->prepare("SELECT COUNT(*) FROM transacciones t LEFT JOIN sifone_asociados sa ON sa.cedula = t.cedula $w");
@@ -193,17 +389,34 @@ final class TransaccionService
         $st->execute();
         $rows = $st->fetchAll();
 
-        // Adjuntar detalles
-        foreach ($rows as &$tx) {
-            $stD = $this->db->prepare(
-                "SELECT d.*, p.nombre AS producto_nombre
-                 FROM transacciones_detalle d
-                 LEFT JOIN productos p ON p.id = d.producto_id
-                 WHERE d.transaccion_id = ? ORDER BY d.id"
-            );
-            $stD->execute([$tx['id']]);
-            $tx['detalles'] = $stD->fetchAll();
+        if (!$rows) {
+            return ['rows' => [], 'total' => $total, 'limit' => $limit, 'offset' => $offset];
         }
+
+        // Detalles en una sola consulta (evita N+1 por transacción).
+        $ids = array_map(static fn(array $tx): int => (int) $tx['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stD = $this->db->prepare(
+            "SELECT d.*, p.nombre AS producto_nombre
+             FROM transacciones_detalle d
+             LEFT JOIN productos p ON p.id = d.producto_id
+             WHERE d.transaccion_id IN ($in)
+             ORDER BY d.id"
+        );
+        $stD->execute($ids);
+        $detalles = [];
+        foreach ($stD->fetchAll() as $det) {
+            $detalles[(int) $det['transaccion_id']][] = $det;
+        }
+
+        foreach ($rows as &$tx) {
+            $tx['detalles'] = $detalles[(int) $tx['id']] ?? [];
+            $tx['valor_asignado'] = 0.0;
+            foreach ($tx['detalles'] as $det) {
+                $tx['valor_asignado'] += (float) ($det['valor_asignado'] ?? 0);
+            }
+        }
+        unset($tx);
         return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
     }
 
@@ -219,6 +432,95 @@ final class TransaccionService
         } catch (Throwable $e) {
             $this->db->rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Valida que el pago exista, esté vigente y tenga saldo suficiente.
+     * Debe llamarse dentro de una transacción para bloquear el pago.
+     */
+    private function validarPagoDisponible(string $origen, string $pagoId, float $valor): void
+    {
+        if ($pagoId === '') {
+            throw new DomainException('Falta el pago seleccionado.');
+        }
+
+        if ($origen === 'pse') {
+            $lock = $this->db->prepare("SELECT pse_id FROM pagos_pse WHERE pse_id = ? FOR UPDATE");
+            $lock->execute([$pagoId]);
+            if (!$lock->fetch()) {
+                throw new DomainException('El pago PSE no existe.');
+            }
+
+            $st = $this->db->prepare(
+                "SELECT p.estado,
+                        p.valor - COALESCE(tx.usado, 0) AS restante,
+                        EXISTS (SELECT 1 FROM pagos_conciliacion pc WHERE pc.pse_id = p.pse_id) AS con_cruce
+                 FROM pagos_pse p
+                 LEFT JOIN (
+                     SELECT pse_id, SUM(valor_total) AS usado
+                     FROM transacciones
+                     WHERE pse_id IS NOT NULL AND pse_id <> ''
+                     GROUP BY pse_id
+                 ) tx ON tx.pse_id = p.pse_id
+                 WHERE p.pse_id = ?"
+            );
+            $st->execute([$pagoId]);
+            $pago = $st->fetch();
+            if (!$pago) {
+                throw new DomainException('El pago PSE no existe.');
+            }
+            if ($pago['estado'] !== 'Aprobada') {
+                throw new DomainException('El pago PSE no está aprobado.');
+            }
+            if (!(int) $pago['con_cruce']) {
+                throw new DomainException('El pago PSE no está validado con Confiar.');
+            }
+            if ((float) $pago['restante'] + 0.01 < $valor) {
+                throw new DomainException('El pago PSE no tiene saldo suficiente.');
+            }
+            return;
+        }
+
+        $lock = $this->db->prepare("SELECT confiar_id FROM pagos_confiar WHERE confiar_id = ? FOR UPDATE");
+        $lock->execute([$pagoId]);
+        if (!$lock->fetch()) {
+            throw new DomainException('El pago Confiar no existe.');
+        }
+
+        $st = $this->db->prepare(
+            "SELECT COALESCE(pco.estado, 'pendiente') AS estado,
+                    pco.cedula AS cedula_asignada,
+                    COALESCE(c.valor_consignacion, 0) - COALESCE(tx.usado, 0) AS restante
+             FROM pagos_confiar c
+             LEFT JOIN pagos_confirmacion pco ON pco.confiar_id = c.confiar_id
+             LEFT JOIN (
+                 SELECT confiar_id, SUM(valor_total) AS usado FROM (
+                     SELECT t.id, t.confiar_id, t.valor_total
+                     FROM transacciones t
+                     WHERE t.confiar_id IS NOT NULL AND t.confiar_id <> ''
+                     UNION
+                     SELECT t.id, pc2.confiar_id, t.valor_total
+                     FROM transacciones t
+                     JOIN pagos_conciliacion pc2 ON pc2.pse_id = t.pse_id
+                     WHERE t.pse_id IS NOT NULL AND t.pse_id <> ''
+                 ) u GROUP BY confiar_id
+             ) tx ON tx.confiar_id = c.confiar_id
+             WHERE c.confiar_id = ?"
+        );
+        $st->execute([$pagoId]);
+        $pago = $st->fetch();
+        if (!$pago) {
+            throw new DomainException('El pago Confiar no existe.');
+        }
+        if ($pago['estado'] === 'no_valido') {
+            throw new DomainException('El pago Confiar no es válido.');
+        }
+        if ($pago['estado'] !== 'asignado' || empty($pago['cedula_asignada'])) {
+            throw new DomainException('El pago Confiar debe estar asignado a un asociado.');
+        }
+        if ((float) $pago['restante'] + 0.01 < $valor) {
+            throw new DomainException('El pago Confiar no tiene saldo suficiente.');
         }
     }
 }
