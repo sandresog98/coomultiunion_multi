@@ -22,7 +22,7 @@ if ($m !== 'GET') {
 }
 
 if ($ent === 'secciones') {
-    if ($m === 'GET') Http::ok($cfg->secciones());
+    if ($m === 'GET') Http::ok(($_GET['conteos'] ?? '') === '1' ? $cfg->seccionesConContadores() : $cfg->secciones());
     elseif ($m === 'POST') Http::ok(['id' => $cfg->seccionCrear($in, $actor)], 201);
     elseif ($m === 'PUT') { if ($id <= 0) Http::fail('Falta el id.'); $cfg->seccionEditar($id, $in, $actor); Http::ok(['id' => $id]); }
     elseif ($m === 'DELETE') { if ($id <= 0) Http::fail('Falta el id.'); $cfg->seccionEliminar($id, $actor); Http::ok(['id' => $id]); }

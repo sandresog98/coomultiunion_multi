@@ -66,8 +66,8 @@ final class MovimientoService
             $where[] = 'm.tipo = ?';
             $params[] = $tipo;
         }
-        if ($fechaDesde !== '') { $where[] = "DATE(m.fecha) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta !== '') { $where[] = "DATE(m.fecha) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde !== '') { $where[] = "m.fecha >= ?"; $params[] = $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = "m.fecha <= ?"; $params[] = $fechaHasta; }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $st = $this->db->prepare(

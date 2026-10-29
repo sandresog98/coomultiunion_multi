@@ -123,8 +123,7 @@ const RANGO={sin:['Sin','danger'],muy_reciente:['Muy reciente','success'],recien
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.querySelectorAll('.sortable').forEach(th=>th.addEventListener('click',()=>{
   const col=th.dataset.col;if(state.order===col)state.dir=state.dir==='ASC'?'DESC':'ASC';else{state.order=col;state.dir='DESC';}
   state.page=0;cargar();
@@ -196,20 +195,30 @@ function renderPagination(t){const N=Math.ceil(t/state.size);if(N<=1){document.g
 function goPage(p){state.page=p;cargar();}
 
 // ── Comunicación ──
-let TIPOS_COMM={};
+let TIPOS_COMM={}, TIPOS_COMM_CARGADOS=false, TIPOS_COMM_PROMISE=null;
 let comTipoOrigen='credito';
 async function cargarTiposComm(){
-  try{const rows=await api('cobranza/tipos?opciones=1');
-    TIPOS_COMM={};
-    rows.forEach(t=>{TIPOS_COMM[t.id]={tipo:t.tipo,estado:t.estado,label:t.label};});
-    const tipos=[...new Set(rows.map(t=>t.tipo))], estados=[...new Set(rows.map(t=>t.estado))];
-    document.getElementById('comTipo').innerHTML=tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
-    document.getElementById('comEstado').innerHTML=estados.map(s=>`<option value="${s}">${s}</option>`).join('');
-  }catch(e){}
+  if(TIPOS_COMM_CARGADOS) return;
+  if(TIPOS_COMM_PROMISE) return TIPOS_COMM_PROMISE;
+  TIPOS_COMM_PROMISE=(async()=>{
+    try{
+      const rows=await api('cobranza/tipos?opciones=1');
+      TIPOS_COMM={};
+      rows.forEach(t=>{TIPOS_COMM[t.id]={tipo:t.tipo,estado:t.estado,label:t.label};});
+      const tipos=[...new Set(rows.map(t=>t.tipo))], estados=[...new Set(rows.map(t=>t.estado))];
+      document.getElementById('comTipo').innerHTML=tipos.map(t=>`<option value="${t}">${t}</option>`).join('');
+      document.getElementById('comEstado').innerHTML=estados.map(s=>`<option value="${s}">${s}</option>`).join('');
+      TIPOS_COMM_CARGADOS=true;
+    }finally{
+      TIPOS_COMM_PROMISE=null;
+    }
+  })();
+  return TIPOS_COMM_PROMISE;
 }
 document.getElementById('comEstado').addEventListener('change',function(){toggleCompromiso(this.value==='comprometido');});
 function toggleCompromiso(show){document.getElementById('wrapComp').classList.toggle('d-none',!show);document.getElementById('wrapCompM').classList.toggle('d-none',!show);}
-function comunicar(r){
+async function comunicar(r){
+  try{await cargarTiposComm();}catch(e){alert('No se pudieron cargar los tipos de comunicación: '+e.message);return;}
   comTipoOrigen=(r.tipo_mora==='aportes')?'aportes':'credito';
   document.getElementById('comCedula').value=r.cedula;document.getElementById('comId').value='';
   document.getElementById('comFecha').value=new Date().toISOString().slice(0,16);
@@ -269,7 +278,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const qp=new URLSearchParams(location.search).get('q');
   if(qp){document.getElementById('q').value=qp;state.q=qp;}
   window.Listado.mountSize('fSizeBox', state, cargar);
-  cargarTiposComm();cargarKPIs();cargar();
+  cargarKPIs();cargar();
 });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

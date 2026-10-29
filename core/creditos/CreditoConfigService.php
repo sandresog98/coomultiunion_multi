@@ -80,6 +80,26 @@ final class CreditoConfigService
     {
         return $this->db->query("SELECT * FROM credito_config_seccion ORDER BY orden, id")->fetchAll();
     }
+
+    /** Secciones con conteo de campos/documentos activos (una sola consulta). */
+    public function seccionesConContadores(): array
+    {
+        return $this->db->query(
+            "SELECT s.*,
+                    COALESCE(c.n, 0) AS campos_count,
+                    COALESCE(d.n, 0) AS documentos_count
+             FROM credito_config_seccion s
+             LEFT JOIN (
+                 SELECT seccion_id, COUNT(*) AS n FROM credito_config_campo
+                 WHERE estado_activo = 1 GROUP BY seccion_id
+             ) c ON c.seccion_id = s.id
+             LEFT JOIN (
+                 SELECT seccion_id, COUNT(*) AS n FROM credito_config_documento
+                 WHERE estado_activo = 1 GROUP BY seccion_id
+             ) d ON d.seccion_id = s.id
+             ORDER BY s.orden, s.id"
+        )->fetchAll();
+    }
     public function seccionCrear(array $d, ?array $actor = null): int
     {
         $codigo = strtolower(trim((string) ($d['codigo'] ?? '')));
@@ -252,26 +272,7 @@ final class CreditoConfigService
             $st->execute([(string) $ref, (int) $ref]);
         }
         $secciones = $st->fetchAll();
-        $out = [];
-        foreach ($secciones as $sec) {
-            $vis = json_decode((string) $sec['visible_en'], true) ?: ['staff', 'cx'];
-            if (!in_array($canal, $vis, true)) continue;
-
-            $cam = $this->db->prepare("SELECT * FROM credito_config_campo WHERE seccion_id=? AND estado_activo=1 ORDER BY orden, id");
-            $cam->execute([$sec['id']]);
-            $campos = array_filter($cam->fetchAll(), fn($c) => self::aplica($c, $canal, $tipoSolicitante));
-
-            $doc = $this->db->prepare("SELECT * FROM credito_config_documento WHERE seccion_id=? AND estado_activo=1 ORDER BY orden, id");
-            $doc->execute([$sec['id']]);
-            $documentos = array_filter($doc->fetchAll(), fn($d) => self::aplica($d, $canal, $tipoSolicitante));
-
-            $out[] = [
-                'seccion' => ['id' => $sec['id'], 'codigo' => $sec['codigo'], 'nombre' => $sec['nombre'], 'ocasion' => $sec['ocasion']],
-                'campos' => array_values($campos),
-                'documentos' => array_values($documentos),
-            ];
-        }
-        return $out;
+        return $this->armarSecciones($secciones, $canal, $tipoSolicitante);
     }
 
     /**
@@ -281,23 +282,52 @@ final class CreditoConfigService
     public function renderSeccionesAll(string $canal = 'staff', ?string $tipoSolicitante = null): array
     {
         $secciones = $this->db->query("SELECT * FROM credito_config_seccion WHERE estado_activo=1 ORDER BY orden, id")->fetchAll();
+        return $this->armarSecciones($secciones, $canal, $tipoSolicitante);
+    }
+
+    /** Carga campos y documentos de todas las secciones en dos consultas (evita N+1). */
+    private function armarSecciones(array $secciones, string $canal, ?string $tipoSolicitante): array
+    {
+        if (!$secciones) {
+            return [];
+        }
+        $ids = array_map(static fn(array $s): int => (int) $s['id'], $secciones);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+
+        $st = $this->db->prepare(
+            "SELECT * FROM credito_config_campo
+             WHERE seccion_id IN ($in) AND estado_activo=1
+             ORDER BY seccion_id, orden, id"
+        );
+        $st->execute($ids);
+        $camposPorSeccion = [];
+        foreach ($st->fetchAll() as $c) {
+            if (self::aplica($c, $canal, $tipoSolicitante)) {
+                $camposPorSeccion[(int) $c['seccion_id']][] = $c;
+            }
+        }
+
+        $st = $this->db->prepare(
+            "SELECT * FROM credito_config_documento
+             WHERE seccion_id IN ($in) AND estado_activo=1
+             ORDER BY seccion_id, orden, id"
+        );
+        $st->execute($ids);
+        $docsPorSeccion = [];
+        foreach ($st->fetchAll() as $d) {
+            if (self::aplica($d, $canal, $tipoSolicitante)) {
+                $docsPorSeccion[(int) $d['seccion_id']][] = $d;
+            }
+        }
+
         $out = [];
         foreach ($secciones as $sec) {
             $vis = json_decode((string) $sec['visible_en'], true) ?: ['staff', 'cx'];
             if (!in_array($canal, $vis, true)) continue;
-
-            $cam = $this->db->prepare("SELECT * FROM credito_config_campo WHERE seccion_id=? AND estado_activo=1 ORDER BY orden, id");
-            $cam->execute([$sec['id']]);
-            $campos = array_filter($cam->fetchAll(), fn($c) => self::aplica($c, $canal, $tipoSolicitante));
-
-            $doc = $this->db->prepare("SELECT * FROM credito_config_documento WHERE seccion_id=? AND estado_activo=1 ORDER BY orden, id");
-            $doc->execute([$sec['id']]);
-            $documentos = array_filter($doc->fetchAll(), fn($d) => self::aplica($d, $canal, $tipoSolicitante));
-
             $out[] = [
                 'seccion' => ['id' => $sec['id'], 'codigo' => $sec['codigo'], 'nombre' => $sec['nombre'], 'ocasion' => $sec['ocasion']],
-                'campos' => array_values($campos),
-                'documentos' => array_values($documentos),
+                'campos' => $camposPorSeccion[(int) $sec['id']] ?? [],
+                'documentos' => $docsPorSeccion[(int) $sec['id']] ?? [],
             ];
         }
         return $out;

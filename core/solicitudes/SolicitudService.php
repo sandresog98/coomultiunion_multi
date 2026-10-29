@@ -629,16 +629,27 @@ final class SolicitudService
     private function gateStockBoleta(int $solicitudId): void
     {
         $items = $this->repo->itemsBoleta($solicitudId);
-        $pdo = $this->repo->pdo();
+        if (!$items) {
+            return;
+        }
+        $ids = array_values(array_unique(array_map(static fn(array $it): int => (int) $it['producto_id'], $items)));
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $st = $this->repo->pdo()->prepare(
+            "SELECT producto_id, COUNT(*) AS disponibles
+             FROM boleteria_boletas
+             WHERE producto_id IN ($in) AND estado = 'disponible'
+             GROUP BY producto_id"
+        );
+        $st->execute($ids);
+        $disponibles = [];
+        foreach ($st->fetchAll() as $r) {
+            $disponibles[(int) $r['producto_id']] = (int) $r['disponibles'];
+        }
         foreach ($items as $it) {
-            $st = $pdo->prepare(
-                "SELECT COUNT(*) FROM boleteria_boletas WHERE producto_id = ? AND estado = 'disponible'"
-            );
-            $st->execute([(int) $it['producto_id']]);
-            $disponibles = (int) $st->fetchColumn();
-            if ($disponibles < (int) $it['cantidad']) {
+            $stock = $disponibles[(int) $it['producto_id']] ?? 0;
+            if ($stock < (int) $it['cantidad']) {
                 throw new DomainException(
-                    "Stock insuficiente para '" . $it['producto_nombre'] . "' — disponible $disponibles, se requieren {$it['cantidad']}."
+                    "Stock insuficiente para '" . $it['producto_nombre'] . "' — disponible $stock, se requieren {$it['cantidad']}."
                 );
             }
         }

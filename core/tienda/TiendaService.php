@@ -236,15 +236,25 @@ final class TiendaService
         $st->execute([$id]);
         $detalles = $st->fetchAll();
 
-        foreach ($detalles as &$d) {
-            $st = $this->db->prepare(
-                "SELECT id, numero_serie, estado FROM tienda_stock WHERE compra_detalle_id = ? ORDER BY id"
+        if ($detalles) {
+            $ids = array_map(static fn(array $d): int => (int) $d['id'], $detalles);
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $stU = $this->db->prepare(
+                "SELECT compra_detalle_id, id, numero_serie, estado
+                 FROM tienda_stock WHERE compra_detalle_id IN ($in) ORDER BY id"
             );
-            $st->execute([$d['id']]);
-            $d['unidades'] = $st->fetchAll();
-            $series = array_values(array_filter(array_map(static fn($u) => $u['numero_serie'], $d['unidades'])));
-            $d['series'] = $series;
-            $d['con_serie'] = $series !== [] ? 1 : 0;
+            $stU->execute($ids);
+            $unidades = [];
+            foreach ($stU->fetchAll() as $u) {
+                $unidades[(int) $u['compra_detalle_id']][] = $u;
+            }
+            foreach ($detalles as &$d) {
+                $d['unidades'] = $unidades[(int) $d['id']] ?? [];
+                $series = array_values(array_filter(array_map(static fn($u) => $u['numero_serie'], $d['unidades'])));
+                $d['series'] = $series;
+                $d['con_serie'] = $series !== [] ? 1 : 0;
+            }
+            unset($d);
         }
         $compra['detalles'] = $detalles;
         return $compra;
@@ -503,7 +513,7 @@ final class TiendaService
         int $limit = 20,
         int $offset = 0
     ): array {
-        $where = ['(EXISTS (SELECT 1 FROM tienda_stock ss WHERE ss.producto_id = p.id) OR EXISTS (SELECT 1 FROM tienda_compra_detalles dd WHERE dd.producto_id = p.id))'];
+        $where = ['(st.total IS NOT NULL OR ci.ingresado IS NOT NULL)'];
         $params = [];
         if ($q !== '') {
             $where[] = "p.nombre LIKE ?";
@@ -511,11 +521,26 @@ final class TiendaService
         }
         if ($categoriaId > 0) { $where[] = "p.categoria_id = ?"; $params[] = $categoriaId; }
         if ($marcaId > 0) { $where[] = "p.marca_id = ?"; $params[] = $marcaId; }
-        if ($estado === 'disponible') $where[] = "(SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible') > 0";
-        elseif ($estado === 'vendido') $where[] = "(SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'vendido') > 0";
+        if ($estado === 'disponible') $where[] = "COALESCE(st.disponible, 0) > 0";
+        elseif ($estado === 'vendido') $where[] = "COALESCE(st.vendido, 0) > 0";
         $w = 'WHERE ' . implode(' AND ', $where);
 
-        $st = $this->db->prepare("SELECT COUNT(*) FROM tienda_productos p $w");
+        $from = "FROM tienda_productos p
+                 JOIN tienda_categorias c ON c.id = p.categoria_id
+                 JOIN tienda_marcas m ON m.id = p.marca_id
+                 LEFT JOIN (
+                     SELECT producto_id, SUM(cantidad) AS ingresado
+                     FROM tienda_compra_detalles GROUP BY producto_id
+                 ) ci ON ci.producto_id = p.id
+                 LEFT JOIN (
+                     SELECT producto_id, COUNT(*) AS total,
+                            SUM(CASE WHEN estado = 'vendido' THEN 1 ELSE 0 END) AS vendido,
+                            SUM(CASE WHEN estado = 'disponible' THEN 1 ELSE 0 END) AS disponible,
+                            SUM(CASE WHEN estado = 'anulado' THEN 1 ELSE 0 END) AS anulado
+                     FROM tienda_stock GROUP BY producto_id
+                 ) st ON st.producto_id = p.id";
+
+        $st = $this->db->prepare("SELECT COUNT(*) $from $w");
         $st->execute($params);
         $total = (int) $st->fetchColumn();
 
@@ -524,22 +549,19 @@ final class TiendaService
         $col = match ($orderBy) {
             'categoria' => 'c.nombre',
             'marca' => 'm.nombre',
-            'ingresado' => '(SELECT COALESCE(SUM(d.cantidad),0) FROM tienda_compra_detalles d WHERE d.producto_id = p.id)',
-            'vendido' => '(SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = \'vendido\')',
-            'disponible' => '(SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = \'disponible\')',
+            'ingresado' => 'COALESCE(ci.ingresado, 0)',
+            'vendido' => 'COALESCE(st.vendido, 0)',
+            'disponible' => 'COALESCE(st.disponible, 0)',
             default => "p.$orderBy",
         };
 
         $sql = "SELECT p.id, p.nombre, p.foto_path, p.estado_activo,
                        c.nombre AS categoria_nombre, m.nombre AS marca_nombre,
-                       COALESCE((SELECT SUM(d.cantidad) FROM tienda_compra_detalles d WHERE d.producto_id = p.id), 0) AS ingresado,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'vendido') AS vendido,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible') AS disponible,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'anulado') AS anulado
-                FROM tienda_productos p
-                JOIN tienda_categorias c ON c.id = p.categoria_id
-                JOIN tienda_marcas m ON m.id = p.marca_id
-                $w ORDER BY $col $orderDir LIMIT ? OFFSET ?";
+                       COALESCE(ci.ingresado, 0) AS ingresado,
+                       COALESCE(st.vendido, 0) AS vendido,
+                       COALESCE(st.disponible, 0) AS disponible,
+                       COALESCE(st.anulado, 0) AS anulado
+                $from $w ORDER BY $col $orderDir LIMIT ? OFFSET ?";
         $st = $this->db->prepare($sql);
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);
         $st->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
@@ -570,12 +592,24 @@ final class TiendaService
         );
         $st->execute([$productoId]);
         $lotes = $st->fetchAll();
-        foreach ($lotes as &$l) {
-            $st = $this->db->prepare(
-                "SELECT numero_serie, estado FROM tienda_stock WHERE compra_detalle_id = ? AND numero_serie IS NOT NULL ORDER BY id"
+        if ($lotes) {
+            $ids = array_map(static fn(array $l): int => (int) $l['id'], $lotes);
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $stS = $this->db->prepare(
+                "SELECT compra_detalle_id, numero_serie, estado
+                 FROM tienda_stock
+                 WHERE compra_detalle_id IN ($in) AND numero_serie IS NOT NULL
+                 ORDER BY id"
             );
-            $st->execute([$l['id']]);
-            $l['series'] = $st->fetchAll();
+            $stS->execute($ids);
+            $series = [];
+            foreach ($stS->fetchAll() as $s) {
+                $series[(int) $s['compra_detalle_id']][] = $s;
+            }
+            foreach ($lotes as &$l) {
+                $l['series'] = $series[(int) $l['id']] ?? [];
+            }
+            unset($l);
         }
         $producto['lotes'] = $lotes;
 
@@ -620,7 +654,7 @@ final class TiendaService
     /** Catálogo para el POS: productos con stock disponible (con precio sugerido de última compra). */
     public function catalogoVenta(string $q = '', int $categoriaId = 0, int $marcaId = 0): array
     {
-        $where = ["p.estado_activo = 1", "EXISTS (SELECT 1 FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible')"];
+        $where = ["p.estado_activo = 1", "COALESCE(st.disponible, 0) > 0"];
         $params = [];
         if ($q !== '') {
             $where[] = "(p.nombre LIKE ? OR c.nombre LIKE ? OR m.nombre LIKE ?)";
@@ -636,11 +670,16 @@ final class TiendaService
                                  WHERE cd.producto_id = p.id AND EXISTS (SELECT 1 FROM tienda_stock s
                                         WHERE s.compra_detalle_id = cd.id AND s.estado = 'disponible')
                                  ORDER BY cd.id DESC LIMIT 1), p.precio_venta_sugerido) AS precio_sugerido,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible') AS disponible,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible' AND s.numero_serie IS NOT NULL) AS tiene_serie
+                       COALESCE(st.disponible, 0) AS disponible,
+                       COALESCE(st.tiene_serie, 0) AS tiene_serie
                 FROM tienda_productos p
                 JOIN tienda_categorias c ON c.id = p.categoria_id
                 JOIN tienda_marcas m ON m.id = p.marca_id
+                LEFT JOIN (
+                    SELECT producto_id, COUNT(*) AS disponible,
+                           SUM(CASE WHEN numero_serie IS NOT NULL THEN 1 ELSE 0 END) AS tiene_serie
+                    FROM tienda_stock WHERE estado = 'disponible' GROUP BY producto_id
+                ) st ON st.producto_id = p.id
                 $w ORDER BY p.nombre";
         $st = $this->db->prepare($sql);
         $st->execute($params);
@@ -689,13 +728,27 @@ final class TiendaService
         $orderCol = $orderBy === 'fecha_venta' ? 'COALESCE(v.fecha_venta, v.fecha_creacion)' : "v.$orderBy";
 
         $sql = "SELECT v.*, COALESCE(sa.nombre, cl.nombre, v.cedula) AS cliente_nombre,
-                       (SELECT COUNT(*) FROM tienda_venta_detalles vd WHERE vd.venta_id = v.id) AS total_items,
-                       (SELECT COALESCE(SUM(vd.cantidad), 0) FROM tienda_venta_detalles vd WHERE vd.venta_id = v.id) AS total_cantidad,
-                       (SELECT COUNT(*) FROM tienda_venta_pagos pg WHERE pg.venta_id = v.id) AS total_pagos,
-                       (SELECT COUNT(*) FROM tienda_reversiones r JOIN tienda_venta_detalles vd ON vd.id = r.venta_detalle_id WHERE vd.venta_id = v.id) AS reversiones
+                       COALESCE(dv.total_items, 0) AS total_items,
+                       COALESCE(dv.total_cantidad, 0) AS total_cantidad,
+                       COALESCE(pg.total_pagos, 0) AS total_pagos,
+                       COALESCE(rv.reversiones, 0) AS reversiones
                 FROM tienda_ventas v
                 LEFT JOIN tienda_clientes cl ON cl.id = v.cliente_id
                 LEFT JOIN sifone_asociados sa ON sa.cedula = v.cedula
+                LEFT JOIN (
+                    SELECT venta_id, COUNT(*) AS total_items, COALESCE(SUM(cantidad), 0) AS total_cantidad
+                    FROM tienda_venta_detalles GROUP BY venta_id
+                ) dv ON dv.venta_id = v.id
+                LEFT JOIN (
+                    SELECT venta_id, COUNT(*) AS total_pagos
+                    FROM tienda_venta_pagos GROUP BY venta_id
+                ) pg ON pg.venta_id = v.id
+                LEFT JOIN (
+                    SELECT vd.venta_id, COUNT(*) AS reversiones
+                    FROM tienda_reversiones r
+                    JOIN tienda_venta_detalles vd ON vd.id = r.venta_detalle_id
+                    GROUP BY vd.venta_id
+                ) rv ON rv.venta_id = v.id
                 $w ORDER BY $orderCol $orderDir LIMIT ? OFFSET ?";
         $st = $this->db->prepare($sql);
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);
@@ -744,6 +797,22 @@ final class TiendaService
         $st->execute([$id]);
         $detalles = $st->fetchAll();
 
+        $unidadesMap = [];
+        if ($detalles) {
+            $ids = array_map(static fn(array $d): int => (int) $d['id'], $detalles);
+            $in = implode(',', array_fill(0, count($ids), '?'));
+            $stU = $this->db->prepare(
+                "SELECT vds.venta_detalle_id, s.numero_serie, s.precio_compra, s.precio_venta
+                 FROM tienda_venta_detalle_stock vds
+                 JOIN tienda_stock s ON s.id = vds.stock_id
+                 WHERE vds.venta_detalle_id IN ($in) ORDER BY s.id"
+            );
+            $stU->execute($ids);
+            foreach ($stU->fetchAll() as $u) {
+                $unidadesMap[(int) $u['venta_detalle_id']][] = $u;
+            }
+        }
+
         $totalCosto = 0.0;
         $totalGanancia = 0.0;
         foreach ($detalles as &$d) {
@@ -756,14 +825,10 @@ final class TiendaService
                 $totalCosto += $d['costo_total'];
                 $totalGanancia += $d['ganancia'];
             }
-            $st = $this->db->prepare(
-                "SELECT s.numero_serie, s.precio_compra, s.precio_venta FROM tienda_venta_detalle_stock vds
-                 JOIN tienda_stock s ON s.id = vds.stock_id WHERE vds.venta_detalle_id = ? ORDER BY s.id"
-            );
-            $st->execute([$d['id']]);
-            $d['unidades'] = $st->fetchAll();
+            $d['unidades'] = $unidadesMap[(int) $d['id']] ?? [];
             $d['series'] = array_values(array_filter(array_map(static fn($u) => $u['numero_serie'], $d['unidades'])));
         }
+        unset($d);
         $venta['detalles'] = $detalles;
         $venta['costo_total'] = $totalCosto;
         $venta['ganancia_total'] = $totalGanancia;

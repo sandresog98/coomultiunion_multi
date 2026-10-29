@@ -57,7 +57,7 @@ const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['cobranza_tipos.editar']===true;
 let state={q:'',page:0,size:20,order:'tipo',dir:'ASC'}, editId=null, modal, debounceTimer;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.querySelectorAll('.sortable').forEach(th=>{th.addEventListener('click',()=>{
   const col=th.dataset.col;
   if(state.order===col)state.dir=state.dir==='ASC'?'DESC':'ASC';

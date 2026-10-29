@@ -88,8 +88,7 @@ let asociadoCedula = '', rubros = {creditos:[],mora:[],productos:[]}, detallesTx
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 function fmtDt(v){if(!v)return'—';const d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleDateString('es-CO');}
-async function apicall(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function apicall(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 async function buscarAsociado(){
   const cedula = document.getElementById('bCedula').value.trim();
   if(!cedula) return alert('Ingrese una cédula');

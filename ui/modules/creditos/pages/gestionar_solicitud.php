@@ -115,7 +115,7 @@ function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt
 function tipoLabel(v){return TIPO_LABEL[v]||String(v||'—').replace(/_/g,' ');}
 function tipoCodeudorLabel(v){return TIPO_CODEUDOR_LABEL[v]||String(v||'—').replace(/_/g,' ');}
 function money(v){return Number(v||0).toLocaleString('es-CO',{maximumFractionDigits:0});}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function flag(m){if(m)alert(m);}
 function esCerrada(){return !!S && ESTADOS_CERRADOS.includes(String(S.estado));}
 function motivoCierre(){return String((S&&S.comentarios_rechazo)||'').trim().replace(/^\s*\[(Cancelado|Cancelada|Rechazado|Rechazada)\]\s*/i,'');}

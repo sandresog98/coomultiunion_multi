@@ -1563,6 +1563,10 @@ paths:
       x-required-scopes: [creditos.nueva_solicitud.crear, creditos.gestionar_solicitud.etapas]
       x-module-gate: creditos
       x-idempotent: false
+      parameters:
+        - { name: ent, in: query, schema: { type: string, enum: [secciones, campos, documentos, aceptaciones] } }
+        - { name: seccion_id, in: query, schema: { type: integer } }
+        - { name: conteos, in: query, schema: { type: integer, enum: [1] } }
       responses:
         '200': { $ref: '#/components/responses/OkData' }
         '401': { $ref: '#/components/responses/Unauthorized' }

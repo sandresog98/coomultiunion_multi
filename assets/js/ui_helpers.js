@@ -40,10 +40,48 @@
 
   /** fetch + JSON; usa window.API como base. Lanza Error con j.error si !ok. */
   function api(path, opts) {
-    var base = window.API || '';
-    return fetch(base + path, opts)
-      .then(function (r) { return r.json(); })
-      .then(function (j) { if (!j.ok) throw new Error(j.error || 'Error'); return j.data; });
+    opts = opts || {};
+    var base = opts.base != null ? opts.base : (window.API || '');
+    var method = String(opts.method || 'GET').toUpperCase();
+    var timeoutMs = method === 'GET' ? 12000 : 30000;
+    // Reintentar automáticamente solo lecturas: una mutación con error de red
+    // puede haber sido procesada y no conviene duplicarla.
+    var maxIntentos = method === 'GET' ? 2 : 1;
+
+    function intento(n) {
+      var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+      var init = Object.assign({}, opts);
+      delete init.base;
+      if (controller) init.signal = controller.signal;
+
+      return fetch(base + path, init).then(function (r) {
+        return r.json().catch(function () { return null; }).then(function (j) {
+          return { r: r, j: j };
+        });
+      }).then(function (out) {
+        if (timer) clearTimeout(timer);
+        if (out.j && out.j.ok) return out.j.data;
+        var retriable = out.r.status === 502 || out.r.status === 503 || out.r.status === 504;
+        if (retriable && n < maxIntentos - 1) {
+          var ra = parseInt(out.r.headers.get('Retry-After') || '0', 10);
+          var espera = ra > 0 ? Math.min(ra, 3) * 1000 : 500;
+          return new Promise(function (resolve) { setTimeout(resolve, espera); }).then(function () { return intento(n + 1); });
+        }
+        throw new Error((out.j && out.j.error) || ('Error ' + out.r.status));
+      }, function (err) {
+        if (timer) clearTimeout(timer);
+        if (err && err.name === 'AbortError') {
+          throw new Error('La solicitud tardó demasiado. Intenta de nuevo.');
+        }
+        if (n < maxIntentos - 1) {
+          return new Promise(function (resolve) { setTimeout(resolve, 400); }).then(function () { return intento(n + 1); });
+        }
+        throw new Error('Sin conexión con el servidor');
+      });
+    }
+
+    return intento(0);
   }
 
   /** HTML de paginación (mismo estilo que usaban las páginas). Los enlaces llaman goPage(p). */

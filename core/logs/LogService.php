@@ -42,12 +42,12 @@ final class LogService
             $params[] = $filtros['nivel'];
         }
         if (!empty($filtros['fecha_desde'])) {
-            $where[] = "DATE(l.timestamp) >= ?";
-            $params[] = $filtros['fecha_desde'];
+            $where[] = "l.timestamp >= ?";
+            $params[] = $filtros['fecha_desde'] . ' 00:00:00';
         }
         if (!empty($filtros['fecha_hasta'])) {
-            $where[] = "DATE(l.timestamp) <= ?";
-            $params[] = $filtros['fecha_hasta'];
+            $where[] = "l.timestamp <= ?";
+            $params[] = $filtros['fecha_hasta'] . ' 23:59:59';
         }
         if (!empty($filtros['q'])) {
             $where[] = "l.detalle LIKE ?";
@@ -105,8 +105,8 @@ final class LogService
     {
         $where = [];
         $params = [];
-        if ($fechaDesde) { $where[] = "DATE(timestamp) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta) { $where[] = "DATE(timestamp) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde) { $where[] = "timestamp >= ?"; $params[] = $fechaDesde . ' 00:00:00'; }
+        if ($fechaHasta) { $where[] = "timestamp <= ?"; $params[] = $fechaHasta . ' 23:59:59'; }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $st = $this->db->prepare("SELECT
