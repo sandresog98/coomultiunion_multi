@@ -1,12 +1,27 @@
 # Contribución y flujo de ramas
 
+## Regla de oro (obligatoria)
+
+**Nunca se hace merge directo a `master`.** El único flujo permitido es:
+
+```text
+rama/*  ──PR──▶  develop  ──PR──▶  master
+```
+
+- Ningún `feature/*`, `fix/*`, `hotfix/*` o rama personal puede abrir PR directo a `master`.
+- `hotfix/*` **no es una excepción**: nace desde `develop`, entra por PR a `develop` y luego
+  `develop` pasa por PR a `master`.
+- No se permite merge local ni push directo a `master`.
+- `master` solo puede recibir cambios desde `develop` mediante un PR aprobado.
+- Si un PR aparece con base `master` y no viene de `develop`, debe cerrarse y recrearse contra `develop`.
+
 ## Ramas
 
 | Rama | Uso | Protección |
 |---|---|---|
-| `master` | Producción (línea base desplegada). | PR obligatorio · sin push directo · sin force-push · sin borrar |
+| `master` | Producción (línea base desplegada). Solo recibe PR desde `develop`. | PR obligatorio · sin push directo · sin force-push · sin borrar |
 | `develop` | Integración y **fuente del servidor de test**. | PR obligatorio · sin push directo · sin force-push · **no se elimina** |
-| `feature/*`, `fix/*`, `docs/*` | Trabajo local. | — |
+| `feature/*`, `fix/*`, `docs/*`, `hotfix/*` | Trabajo local. Siempre entran por PR a `develop`. | — |
 
 ## Flujo de cambios
 
@@ -24,9 +39,25 @@
 5. Abrir **Pull Request `develop` → `master`** (requiere 1 aprobación).
 6. Merge a `master` y etiquetar el release.
 
-```
+```text
 feature/*  ──PR──▶  develop  ──PR──▶  master (producción)
+fix/*      ──PR──▶  develop
+hotfix/*   ──PR──▶  develop  ──PR──▶  master
 ```
+
+### Hotfixes
+
+Un hotfix sigue exactamente el mismo flujo:
+
+```bash
+git checkout develop && git pull
+git checkout -b hotfix/descripcion-corta
+# corregir, commit y push
+git push -u origin hotfix/descripcion-corta
+```
+
+Luego: PR `hotfix/*` → `develop` y, una vez integrado y validado, PR `develop` → `master`.
+**No se abre PR de `hotfix/*` directo a `master`.**
 
 ## Reglas de protección (GitHub)
 
@@ -45,7 +76,8 @@ Configurar en **Settings → Rules → Rulesets** (o *Branches*):
 - Block force pushes · Restrict deletions (**la rama no se elimina**).
 - No permitir push directo.
 
-> Los PR hacia `master` deben originarse en `develop` (o `hotfix/*`); los PR hacia `develop`, en ramas locales.
+> Los PR hacia `master` deben originarse **exclusivamente** en `develop`. Los PR hacia `develop`
+> deben originarse en una rama local (`feature/*`, `fix/*`, `docs/*` o `hotfix/*`).
 
 ## Base de datos
 
