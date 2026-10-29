@@ -59,6 +59,35 @@ git push -u origin hotfix/descripcion-corta
 Luego: PR `hotfix/*` → `develop` y, una vez integrado y validado, PR `develop` → `master`.
 **No se abre PR de `hotfix/*` directo a `master`.**
 
+## Estrategia de merge y sincronización
+
+- `feature/*`, `fix/*`, `docs/*` y `hotfix/*` → `develop`: **Squash and merge**.
+- `develop` → `master`: **Merge commit**, no squash ni rebase. Así los commits de `develop`
+  quedan como ancestros de `master` y no se genera divergencia artificial.
+- Después de cada merge a `master`, el workflow
+  `.github/workflows/sync-master-into-develop.yml` crea/actualiza automáticamente un PR
+  `automation/sync-master-into-develop` → `develop`.
+- Ese PR de sincronización debe mergearse para que `develop` no quede atrás de `master`.
+
+Si el repositorio no permite que GitHub Actions cree PRs, activar:
+
+**Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests**.
+
+Si el workflow falla por conflictos, hacer el back-merge manual:
+
+```bash
+git checkout develop && git pull
+git checkout -b fix/sync-master-into-develop
+git merge origin/master
+git push -u origin fix/sync-master-into-develop
+```
+
+Y abrir PR `fix/sync-master-into-develop` → `develop`.
+
+> Si se usa **Squash** también para `develop` → `master`, el workflow de sincronización es
+> obligatorio: sin él, `develop` siempre aparecerá “behind master” por los commits squash,
+> aunque el contenido sea idéntico.
+
 ## Reglas de protección (GitHub)
 
 Configurar en **Settings → Rules → Rulesets** (o *Branches*):
