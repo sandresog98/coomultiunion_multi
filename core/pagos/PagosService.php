@@ -187,7 +187,9 @@ final class PagosService
                  ) tx ON tx.confiar_id = c.confiar_id
                  LEFT JOIN (SELECT pc.confiar_id, COUNT(*) AS pse_count, SUM(p.valor) AS pse_total,
                                    COUNT(DISTINCT p.referencia_2) AS pse_cedulas_count,
-                                   MIN(p.referencia_2) AS pse_cedula
+                                   MIN(p.referencia_2) AS pse_cedula,
+                                   MIN(p.fecha_resolucion) AS pse_fecha,
+                                   MIN(pc.fecha_creacion) AS pse_conciliacion_fecha
                             FROM pagos_conciliacion pc
                             JOIN pagos_pse p ON p.pse_id = pc.pse_id
                             GROUP BY pc.confiar_id) pse ON pse.confiar_id = c.confiar_id
@@ -200,13 +202,16 @@ final class PagosService
         $st = $this->db->prepare(
             "SELECT c.*, pco.id AS confirmacion_id, pco.cedula, pco.ruta_comprobante,
                     pco.comentario, COALESCE(pco.estado,'pendiente') AS confirmacion_estado, pco.motivo_rechazo,
+                    pco.fecha_creacion AS confirmacion_fecha,
                     COALESCE(tx.usado, 0) AS usado,
                     c.valor_consignacion - COALESCE(tx.usado, 0) AS restante,
                     COALESCE(pse.pse_count, 0) AS pse_count,
                     COALESCE(pse.pse_total, 0) AS pse_total,
                     GREATEST(0, c.valor_consignacion - COALESCE(pse.pse_total, 0)) AS pse_restante,
                     COALESCE(pse.pse_cedulas_count, 0) AS pse_cedulas_count,
-                    pse.pse_cedula
+                    pse.pse_cedula,
+                    pse.pse_fecha,
+                    pse.pse_conciliacion_fecha
              $from ORDER BY `$orderBy` $orderDir LIMIT ? OFFSET ?"
         );
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);

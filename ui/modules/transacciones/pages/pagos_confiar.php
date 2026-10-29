@@ -52,7 +52,7 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
           <th class="sortable" data-col="cedula">Cédula</th>
           <th class="sortable text-center" data-col="pse_count">PSE</th>
           <th class="sortable text-center" data-col="confirmacion_estado">Estado</th>
-          <th class="sortable" data-col="fecha">Fecha</th>
+          <th class="sortable" data-col="fecha">Fecha pago</th>
           <th class="text-center">Acciones</th>
         </tr></thead>
         <tbody id="tbody"><tr><td colspan="8" class="text-center text-muted">Cargando...</td></tr></tbody>
@@ -101,7 +101,8 @@ let mConfirmar,mRechazar,mPseDetalle,debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:2});}
-function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function fmtD(v){if(!v)return'-';const s=String(v).slice(0,10),p=s.split('-');return p.length===3&&p[0]&&p[1]&&p[2]?`${p[2]}/${p[1]}/${p[0]}`:'-';}
+function fmtDt(v){if(!v)return'-';const s=String(v);if(/^\d{4}-\d{2}-\d{2}$/.test(s))return fmtD(s);let d=new Date(s.replace(' ','T'));return isNaN(d.getTime())?'-':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function apicall(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.querySelectorAll('.sortable').forEach(th=>{th.addEventListener('click',()=>{let c=th.dataset.col;if(state.order===c)state.dir=state.dir==='ASC'?'DESC':'ASC';else{state.order=c;state.dir='ASC'}state.page=0;cargar();});});
 function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{let c=th.dataset.col,a=state.order===c;th.classList.toggle('active',a);let t=th.textContent.trim().replace(/[▲▼]/g,''),ar=a?(state.dir==='ASC'?'▲':'▼'):'';th.innerHTML=t+(ar?` <span class="sort-icon">${ar}</span>`:'');});}
@@ -122,6 +123,7 @@ async function cargar(){
     let t=d.total||0;document.getElementById('infoTotal').textContent=t>0?`Mostrando ${o+1}-${Math.min(o+state.size,t)} de ${t}`:'';renderSortIcons();
     document.getElementById('tbody').innerHTML=(d.rows||[]).map(r=>{
       let est=r.confirmacion_estado||'pendiente',acc='';
+      const fechaPago=r.pse_fecha?fmtDt(r.pse_fecha):fmtD(r.fecha);
       const hasPse=Number(r.pse_count||0)>0, usadoN=Number(r.usado||0), valorN=Number(r.valor_consignacion||0);
       let estadoLabel='Pendiente',estadoClass='secondary';
       if(est==='asignado'){estadoLabel='Asignado';estadoClass='success';}
@@ -150,7 +152,11 @@ async function cargar(){
   <td class="text-nowrap">${esc(cedula)}</td>
   <td class="text-center">${pseCell}</td>
   <td class="text-center"><span class="badge text-bg-${estadoClass}">${esc(estadoLabel)}</span></td>
-  <td class="text-nowrap"><small>${fmtDt(r.fecha)}</small></td>
+  <td class="text-nowrap">
+    <div>${fechaPago}</div>
+    ${r.pse_fecha?`<div class="small text-muted">Confiar: ${fmtD(r.fecha)}</div>`:''}
+    ${r.confirmacion_fecha?`<div class="small text-muted">Asignado: ${fmtDt(r.confirmacion_fecha)}</div>`:''}
+  </td>
   <td class="text-center">${acc}</td>
 </tr>`;
     }).join('')||'<tr><td colspan="8" class="text-center text-muted">Sin resultados</td></tr>';
