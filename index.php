@@ -9,6 +9,10 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
 
+require_once __DIR__ . '/core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
+
 // Base de la app (robusto en subdirectorio): /proyecto/multi/multi
 $appBase = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
 
@@ -38,6 +42,15 @@ $apps = [
     padding:40px 16px; font-family:'Poppins','Segoe UI',system-ui,Arial,sans-serif;
     background:linear-gradient(160deg,#0b2f5f 0%,var(--a) 55%,#0b2f5f 100%); color:#fff;
   }
+  /* Señal de entorno: local negro · test rojo · producción azul (sin cambios). */
+  body.env-local{ background:linear-gradient(160deg,#000000 0%,#2b2b2b 55%,#000000 100%); }
+  body.env-test{ background:linear-gradient(160deg,#5c0a0b 0%,#E92E2F 55%,#5c0a0b 100%); }
+  .env-badge{
+    display:inline-block; padding:.15rem .5rem; font-size:.68rem; font-weight:700;
+    letter-spacing:.04em; line-height:1.1; color:#fff; background:#E92E2F;
+    border:1px solid rgba(255,255,255,.35); border-radius:9999px; vertical-align:middle;
+  }
+  body.env-local .env-badge{ background:#000000; }
   .brand{ text-align:center; margin-bottom:34px; }
   .brand h1{ font-size:2.6rem; font-weight:800; letter-spacing:.5px;
     background:linear-gradient(90deg,#fff,var(--y)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
@@ -55,10 +68,11 @@ $apps = [
   .foot{ margin-top:30px; font-size:.8rem; color:#b9c9ee; }
 </style>
 </head>
-<body>
+<body class="<?= $__envClass ?>">
   <div class="brand">
     <h1>Multi App</h1>
     <small>Cooperativa Multiactiva — Aplicación v2</small>
+    <?php if ($__envLabel !== ''): ?><div style="margin-top:10px"><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span></div><?php endif; ?>
   </div>
   <div class="grid">
     <?php foreach ($apps as $a): ?>

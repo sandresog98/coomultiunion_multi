@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once dirname(__DIR__) . '/core/env.php';
 /**
  * Layout compartido de la documentación pública de la API.
  * Uso:  require __DIR__ . '/_layout.php';  ad_head('Título','docs'); ...  ad_foot();
@@ -20,6 +21,8 @@ function ad_head(string $title, string $active, string $extraHead = ''): void
     $base  = ad_base();
     $logo  = $base . '/assets/img/logo_coomultiunion.png';
     $hub   = $base . '/';
+    $envClass = env_body_class();
+    $envLabel = env_label();
     $links = [
         'docs'  => ['Documentación API', $base . '/api-docs/',          'fa-code'],
         'roles' => ['Roles y permisos',  $base . '/api-docs/roles', 'fa-user-shield'],
@@ -42,7 +45,7 @@ function ad_head(string $title, string $active, string $extraHead = ''): void
 <link href="<?= $base ?>/assets/css/theme-dark.css" rel="stylesheet">
 <?= $extraHead ?>
 </head>
-<body class="ad-body">
+<body class="ad-body <?= $envClass ?>">
 <div class="ad-app">
   <header class="ad-header">
     <a class="ad-brand" href="<?= $hub ?>" aria-label="Inicio">
@@ -52,6 +55,7 @@ function ad_head(string $title, string $active, string $extraHead = ''): void
     <div class="ad-titles">
       <h1 class="ad-title">API para integraciones</h1>
       <p class="ad-sub">Documentación de los endpoints autorizados</p>
+      <?php if ($envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($envLabel) ?></span><?php endif; ?>
     </div>
     <nav class="ad-nav">
       <?php foreach ($links as $k => $l): ?>

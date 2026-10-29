@@ -66,4 +66,13 @@ if (!function_exists('env')) {
     {
         return ['test' => 'PRUEBAS', 'local' => 'LOCAL'][app_env()] ?? '';
     }
+
+    /**
+     * Clase CSS del entorno para el <body> (p. ej. 'env-local', 'env-test').
+     * Evita repetir la sanitización en cada superficie.
+     */
+    function env_body_class(): string
+    {
+        return 'env-' . preg_replace('/[^a-z0-9_-]/i', '', app_env());
+    }
 }

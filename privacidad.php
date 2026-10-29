@@ -9,6 +9,9 @@ declare(strict_types=1);
  */
 $appBase = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
 $LOGO = $appBase . '/assets/img/logo.png';
+require_once __DIR__ . '/core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -28,6 +31,9 @@ $LOGO = $appBase . '/assets/img/logo.png';
   .pv-header{ position:sticky; top:0; z-index:1030; display:flex; align-items:center; gap:12px;
     padding:10px 16px; color:#fff; background:linear-gradient(135deg,var(--brand-blue-dark),var(--brand-blue));
     box-shadow:0 2px 10px rgba(17,70,138,.25); }
+  /* Señal de entorno: local negro · test rojo (producción conserva el azul). */
+  body.env-local .pv-header{ background:linear-gradient(135deg,#000000,#2b2b2b); }
+  body.env-test .pv-header{ background:linear-gradient(135deg,#7a0f10,#E92E2F); }
   .pv-header img{ height:38px; }
   .pv-header b{ font-weight:700; }
   .pv-toggle{ margin-left:auto; display:inline-flex; align-items:center; gap:8px; border:0; cursor:pointer;
@@ -53,11 +59,12 @@ $LOGO = $appBase . '/assets/img/logo.png';
   .pv-foot a{ color:var(--brand-blue); }
 </style>
 </head>
-<body class="front-body-pattern">
+<body class="front-body-pattern <?= $__envClass ?>">
 
 <header class="pv-header">
   <img src="<?= $LOGO ?>" alt="Multi App">
   <b>Política de Tratamiento de Datos Personales</b>
+  <?php if ($__envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span><?php endif; ?>
   <button type="button" class="pv-toggle" data-theme-toggle aria-pressed="false" title="Cambiar tema">
     <i class="fas fa-moon" data-theme-icon></i><span data-theme-label>Tema oscuro</span>
   </button>

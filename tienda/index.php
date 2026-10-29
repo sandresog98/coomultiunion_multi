@@ -6,6 +6,9 @@ $appBase = rtrim(dirname($dir), '/'); // '' si la app está en la raíz, o '/mul
 $API = $appBase . '/api/tienda_publico.php';
 $LOGO = $appBase . '/assets/img/logo_telmovil.png';
 $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
+require_once __DIR__ . '/../core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -23,7 +26,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
 <link rel="stylesheet" href="<?= $appBase ?>/tienda/assets/tienda.css">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
-<body>
+<body class="<?= $__envClass ?>">
 
 <div class="td-falling-wrap" aria-hidden="true">
   <div class="td-falling"></div>
@@ -37,6 +40,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
   <a class="td-brand" href="<?= $appBase ?>/tienda/index" aria-label="Catálogo">
     <img src="<?= $LOGO ?>" alt="TELMOVIL">
   </a>
+  <?php if ($__envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span><?php endif; ?>
   <div class="td-search" id="searchWrap">
     <i class="fas fa-search td-lupa"></i>
     <input type="search" id="buscar" placeholder=" " autocomplete="off" aria-label="Buscar productos">
