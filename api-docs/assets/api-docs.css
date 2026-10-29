@@ -43,6 +43,25 @@
 .ad-theme-toggle.is-active,
 .ad-theme-toggle:hover { background: #eaf3fb; }
 
+/* ---------- Señal de entorno (APP_ENV) ----------
+   local → cabecera negra · test → cabecera roja · production → cabecera clara. */
+body.env-test .ad-header {
+  background: linear-gradient(135deg, #7a0f10, #E92E2F);
+  border-bottom-color: transparent;
+}
+body.env-local .ad-header {
+  background: linear-gradient(135deg, #000000, #2b2b2b);
+  border-bottom-color: transparent;
+}
+body.env-test .ad-header .ad-title,
+body.env-local .ad-header .ad-title { color: #fff; }
+body.env-test .ad-header .ad-sub,
+body.env-local .ad-header .ad-sub { color: rgba(255, 255, 255, .82); }
+body.env-test .ad-header .ad-navlink,
+body.env-local .ad-header .ad-navlink { color: #fff; }
+body.env-test .ad-header .ad-navlink:hover,
+body.env-local .ad-header .ad-navlink:hover { background: rgba(255, 255, 255, .16); color: #fff; }
+
 /* ---------- Tabla de roles ---------- */
 .ad-card { border: 1px solid var(--front-line); border-radius: var(--front-radius); box-shadow: var(--front-shadow); background: var(--front-card); }
 .ad-table thead th {

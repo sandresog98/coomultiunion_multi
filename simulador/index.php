@@ -2,6 +2,9 @@
 declare(strict_types=1);
 /** Simulador de crédito (B14) — página pública (fuera de ui/). Consume api/simulacion. */
 require_once __DIR__ . '/../core/database.php';
+require_once __DIR__ . '/../core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
 $db = db();
 // Ruta base a los endpoints (robusto bajo Apache o php -S).
 $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
@@ -26,7 +29,7 @@ $lines = $db->query("SELECT id, nombre_credito, tasa, seguro_vida, seguro_deudor
 <style>
 :root{--prim:var(--brand-blue);--prim-dark:var(--brand-blue-dark);--amar:var(--brand-yellow);--rojo:var(--brand-red);}
 body{background:var(--front-bg);font-family:var(--front-font);min-height:100vh;display:flex;flex-direction:column}
-.sim-header{background:linear-gradient(135deg,var(--prim),var(--prim-dark));padding:14px 26px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.sim-header{background:var(--env-header-bg);padding:14px 26px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,0,0,.15)}
 .sim-header img{height:42px}
 .sim-header h1{color:#fff;font-size:1.25em;font-weight:700;margin:0}
 .sim-container{flex:1 1 auto;max-width:1400px;margin:0 auto;padding:22px 18px}
@@ -45,10 +48,11 @@ body{background:var(--front-bg);font-family:var(--front-font);min-height:100vh;d
 </style>
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
-<body class="front-body-falling">
+<body class="front-body-falling <?= $__envClass ?>">
 <header class="sim-header no-print">
   <img src="<?= $appBase ?>/assets/img/logo.png" alt="Logo">
   <h1><i class="fas fa-calculator me-2"></i>Simulador de Crédito Coomultiunion</h1>
+  <?php if ($__envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span><?php endif; ?>
   <button type="button" class="theme-toggle" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>
 </header>
 <div class="sim-container">

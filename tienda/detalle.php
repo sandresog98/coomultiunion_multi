@@ -6,6 +6,9 @@ $appBase = rtrim(dirname($dir), '/');
 $API = $appBase . '/api/tienda_publico.php';
 $LOGO = $appBase . '/assets/img/logo_telmovil.png';
 $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
+require_once __DIR__ . '/../core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -23,7 +26,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
 <link rel="stylesheet" href="<?= $appBase ?>/tienda/assets/tienda.css">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
-<body>
+<body class="<?= $__envClass ?>">
 
 <div class="td-falling-wrap" aria-hidden="true">
   <div class="td-falling"></div>
@@ -36,6 +39,7 @@ $COOP = $appBase . '/assets/img/logo_coomultiunion.png';
   <a class="td-brand" href="<?= $appBase ?>/tienda/index">
     <img src="<?= $LOGO ?>" alt="TELMOVIL">
   </a>
+  <?php if ($__envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span><?php endif; ?>
   <div class="td-header-right">
     <span class="td-coop d-none d-md-inline-flex"><img src="<?= $COOP ?>" alt="Coomultiunion"></span>
     <button type="button" class="td-icon-btn" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>

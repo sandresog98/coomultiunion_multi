@@ -6,6 +6,9 @@ $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $appBase = rtrim(dirname($dir), '/');
 $API = $appBase . '/api/convenios_publico.php';
 $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
+require_once __DIR__ . '/../core/env.php';
+$__envClass = env_body_class();
+$__envLabel = env_label();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -23,7 +26,7 @@ $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
 <link rel="stylesheet" href="<?= $appBase ?>/convenios/assets/convenios.css">
 <link rel="stylesheet" href="<?= $appBase ?>/assets/css/theme-dark.css">
 </head>
-<body>
+<body class="<?= $__envClass ?>">
 
 <div class="cv-falling-wrap" aria-hidden="true"><div class="cv-falling"></div><div class="cv-falling-overlay"></div></div>
 
@@ -32,6 +35,7 @@ $LOGO = $appBase . '/assets/img/logo_coomultiunion.png';
   <a class="cv-brand" href="<?= $appBase ?>/convenios/index" aria-label="Convenios">
     <img src="<?= $LOGO ?>" alt="Coomultiunion">
   </a>
+  <?php if ($__envLabel !== ''): ?><span class="env-badge"><?= htmlspecialchars($__envLabel) ?></span><?php endif; ?>
   <div class="cv-header-right">
     <button type="button" class="cv-icon-btn" data-theme-toggle title="Cambiar tema" aria-label="Cambiar tema" aria-pressed="false"><i class="fas fa-moon" data-theme-icon></i></button>
     <a class="cv-btn cv-btn-wa" href="https://wa.me/573505780222?text=Hola%2C%20quiero%20consultar%20los%20convenios" target="_blank" rel="noopener" aria-label="Contactar">
