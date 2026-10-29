@@ -60,8 +60,7 @@ let debounceTimer;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function fmtFecha(v){if(!v)return '—';const d=new Date(v+'T00:00:00');return isNaN(d.getTime())?'—':d.toLocaleDateString('es-CO');}
-async function api(p){const r=await fetch(API+p);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.getElementById('q').addEventListener('input',()=>{
   clearTimeout(debounceTimer);
   debounceTimer=setTimeout(()=>{state.q=document.getElementById('q').value.trim();state.page=0;cargar();},300);

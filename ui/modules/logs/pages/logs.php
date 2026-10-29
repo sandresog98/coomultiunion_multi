@@ -86,8 +86,7 @@ let debounceTimer, detailModal;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function intv(v){v=parseInt(v);return isNaN(v)?'—':v.toLocaleString('es-CO');}
-async function api(p){const r=await fetch(API+p);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 // ── Ordenamiento ──
 document.querySelectorAll('.sortable').forEach(th=>{
   th.addEventListener('click',()=>{

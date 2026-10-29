@@ -142,6 +142,152 @@ final class ContactoService
         return (int) ($st->fetchColumn() ?: 0);
     }
 
+    /**
+     * Upsert de contactos en lote (mismo canal). Devuelve mapa dirección normalizada => id.
+     * @param array<int,array{direccion:string,nombre?:?string,asociado_cedula?:?string,metadata?:mixed}> $items
+     * @return array<string,int>
+     */
+    public function upsertLote(string $canal, array $items): array
+    {
+        $porDireccion = [];
+        foreach ($items as $it) {
+            $dir = $this->normalizarDireccion($canal, (string) ($it['direccion'] ?? ''));
+            if ($dir === '') { continue; }
+            if (!isset($porDireccion[$dir])) {
+                $porDireccion[$dir] = [
+                    'direccion' => $dir,
+                    'nombre' => isset($it['nombre']) && trim((string) $it['nombre']) !== ''
+                        ? mb_substr(trim((string) $it['nombre']), 0, 150) : null,
+                    'asociado_cedula' => isset($it['asociado_cedula']) && trim((string) $it['asociado_cedula']) !== ''
+                        ? mb_substr(trim((string) $it['asociado_cedula']), 0, 20) : null,
+                    'metadata' => isset($it['metadata']) ? json_encode($it['metadata'], JSON_UNESCAPED_UNICODE) : null,
+                ];
+            }
+        }
+        if (!$porDireccion) {
+            return [];
+        }
+
+        $filas = array_values($porDireccion);
+        foreach (array_chunk($filas, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '(?,?,?,?,?)'));
+            $params = [];
+            foreach ($chunk as $f) {
+                array_push($params, $canal, $f['direccion'], $f['nombre'], $f['asociado_cedula'], $f['metadata']);
+            }
+            $this->db->prepare(
+                "INSERT INTO com_contactos (canal, direccion, nombre, asociado_cedula, metadata_json)
+                 VALUES $ph
+                 ON DUPLICATE KEY UPDATE
+                    nombre = COALESCE(VALUES(nombre), nombre),
+                    asociado_cedula = COALESCE(VALUES(asociado_cedula), asociado_cedula),
+                    metadata_json = COALESCE(VALUES(metadata_json), metadata_json),
+                    fecha_actualizacion = NOW()"
+            )->execute($params);
+        }
+
+        $out = [];
+        foreach (array_chunk(array_keys($porDireccion), 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            $st = $this->db->prepare(
+                "SELECT id, direccion FROM com_contactos WHERE canal = ? AND direccion IN ($in)"
+            );
+            $st->execute(array_merge([$canal], $chunk));
+            foreach ($st->fetchAll() as $r) {
+                $out[(string) $r['direccion']] = (int) $r['id'];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Opt-in/opt-out maestro para un lote de cédulas.
+     * Devuelve las cédulas que no existen (para que el llamador aplique su fallback).
+     * @param string[] $cedulas
+     * @return string[]
+     */
+    public function setOptInAsociadoLote(array $cedulas, bool $optIn, ?array $actor = null): array
+    {
+        $cedulas = array_values(array_unique(array_filter(array_map(
+            static fn($c): string => trim((string) $c),
+            $cedulas
+        ), static fn(string $c): bool => $c !== '')));
+        if (!$cedulas) {
+            return [];
+        }
+
+        $asociados = [];
+        foreach (array_chunk($cedulas, 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            $st = $this->db->prepare(
+                "SELECT cedula, celular, telefono, email FROM vw_asociados WHERE cedula IN ($in)"
+            );
+            $st->execute($chunk);
+            foreach ($st->fetchAll() as $r) {
+                $asociados[(string) $r['cedula']] = $r;
+            }
+        }
+        $faltantes = array_values(array_filter($cedulas, static fn(string $c): bool => !isset($asociados[$c])));
+        if (!$asociados) {
+            return $faltantes;
+        }
+
+        $ids = array_keys($asociados);
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '(?,?,1)'));
+            $params = [];
+            foreach ($chunk as $c) { array_push($params, $c, $optIn ? 1 : 0); }
+            $this->db->prepare(
+                "INSERT INTO asociados_control (cedula, opt_in, estado_activo)
+                 VALUES $ph
+                 ON DUPLICATE KEY UPDATE opt_in = VALUES(opt_in), fecha_actualizacion = NOW()"
+            )->execute($params);
+        }
+
+        // Asegura que existan los contactos de todos los canales del asociado.
+        $porCanal = ['sms' => [], 'whatsapp' => [], 'email' => []];
+        foreach ($asociados as $c => $a) {
+            $tel = PhoneNormalizer::normalize((string) ($a['celular'] ?? ''));
+            if ($tel) {
+                $porCanal['sms'][$tel] = ['direccion' => $tel, 'asociado_cedula' => $c];
+                $porCanal['whatsapp'][$tel] = ['direccion' => $tel, 'asociado_cedula' => $c];
+            }
+            $tel2 = PhoneNormalizer::normalize((string) ($a['telefono'] ?? ''));
+            if ($tel2 && $tel2 !== $tel) {
+                $porCanal['sms'][$tel2] = ['direccion' => $tel2, 'asociado_cedula' => $c];
+                $porCanal['whatsapp'][$tel2] = ['direccion' => $tel2, 'asociado_cedula' => $c];
+            }
+            $mail = PhoneNormalizer::normalizeEmail((string) ($a['email'] ?? ''));
+            if ($mail) {
+                $porCanal['email'][$mail] = ['direccion' => $mail, 'asociado_cedula' => $c];
+            }
+        }
+        foreach ($porCanal as $canal => $items) {
+            if ($items) { $this->upsertLote($canal, array_values($items)); }
+        }
+
+        $baseSql = $optIn
+            ? "UPDATE com_contactos
+                  SET opt_in=1, opt_in_fuente='asociado', opt_in_fecha=NOW(),
+                      opt_out=0, opt_out_fuente=NULL, opt_out_fecha=NULL, opt_out_motivo=NULL,
+                      fecha_actualizacion=NOW()
+                WHERE asociado_cedula IN (%s)"
+            : "UPDATE com_contactos
+                  SET opt_in=0, opt_in_fuente='asociado', opt_in_fecha=NOW(),
+                      fecha_actualizacion=NOW()
+                WHERE asociado_cedula IN (%s)";
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            $this->db->prepare(sprintf($baseSql, $in))->execute($chunk);
+        }
+
+        Logger::log($optIn ? 'opt_in' : 'opt_out', 'comunicaciones', $actor['id'] ?? null,
+            'Opt-in maestro por lote: ' . count($ids) . ' asociados ' . ($optIn ? 'activos' : 'inactivos'),
+            null, null, $optIn ? 'info' : 'warning');
+
+        return $faltantes;
+    }
+
     public function registrarOptIn(string $canal, string $direccion, string $fuente = 'manual', ?string $evidencia = null, ?array $actor = null): int
     {
         $direccion = $this->normalizarDireccion($canal, $direccion);

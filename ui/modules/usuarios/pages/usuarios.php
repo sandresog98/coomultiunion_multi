@@ -106,8 +106,7 @@ let debounceTimer;
 let modalUser, modalPass;
 
 function showAlert(msg, ok=false){ alertBox.className='alert alert-'+(ok?'success':'danger'); alertBox.textContent=msg; alertBox.classList.remove('d-none'); }
-async function api(path, opt){ const r=await fetch(API+path, opt); const j=await r.json(); if(!j.ok) throw new Error(j.error||'Error'); return j.data; }
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 async function cargar(){
   const off = state.page * state.size;
   const qs = `q=${encodeURIComponent(state.q)}&limit=${state.size}&offset=${off}`;

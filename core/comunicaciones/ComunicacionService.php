@@ -439,14 +439,38 @@ final class ComunicacionService
             ]);
             $planId = (int) $this->db->lastInsertId();
 
-            $ins = $this->db->prepare(
-                "INSERT IGNORE INTO com_destinatarios
-                    (plan_id, contacto_id, asociado_cedula, nombre, destino, canal, variables_json, estado)
-                 VALUES (?,?,?,?,?,?,?, 'pendiente')"
-            );
+            // Contactos y opt-in en bloque (evita N+1 por destinatario).
+            $contactosNuevos = [];
+            $cedulasOptIn = [];
+            foreach ($validRows as $r) {
+                if ((int) ($r['contacto_id'] ?? 0) <= 0) {
+                    $contactosNuevos[] = [
+                        'direccion' => (string) $r['destino'],
+                        'nombre' => $r['nombre'] ?? null,
+                        'asociado_cedula' => $r['cedula'] ?? null,
+                    ];
+                }
+                $cedulaRow = trim((string) ($r['cedula'] ?? ''));
+                if (!empty($r['opt_in']) && $cedulaRow !== '') {
+                    $cedulasOptIn[] = $cedulaRow;
+                }
+            }
+            $mapaContactos = $contactosNuevos
+                ? $this->contactos->upsertLote($canal, $contactosNuevos)
+                : [];
+            $faltantesOptIn = $cedulasOptIn
+                ? $this->contactos->setOptInAsociadoLote($cedulasOptIn, true, $actor)
+                : [];
+            $faltantesSet = array_fill_keys($faltantesOptIn, true);
+
+            $destinatarios = [];
             foreach ($validRows as $r) {
                 $destino = (string) $r['destino'];
+                $destinoNorm = $this->contactos->normalizarDireccion($canal, $destino) ?: $destino;
                 $contactoId = (int) ($r['contacto_id'] ?? 0);
+                if ($contactoId <= 0) {
+                    $contactoId = (int) ($mapaContactos[$destinoNorm] ?? 0);
+                }
                 if ($contactoId <= 0) {
                     $contactoId = $this->contactos->upsert($canal, $destino, [
                         'nombre' => $r['nombre'] ?? null,
@@ -456,9 +480,7 @@ final class ComunicacionService
                 if (!empty($r['opt_in'])) {
                     $cedulaRow = trim((string) ($r['cedula'] ?? ''));
                     if ($cedulaRow !== '') {
-                        try {
-                            $this->contactos->setOptInAsociado($cedulaRow, true, $actor);
-                        } catch (DomainException $e) {
+                        if (isset($faltantesSet[$cedulaRow])) {
                             $this->contactos->registrarOptIn($canal, $destino, 'carga', 'Importación de base', $actor);
                         }
                     } else {
@@ -468,13 +490,27 @@ final class ComunicacionService
                 if (!empty($r['opt_out'])) {
                     $this->contactos->registrarOptOut($canal, $destino, 'manual', 'Marcado en base', $actor);
                 }
-                $ins->execute([
-                    $planId, $contactoId ?: null,
+                $destinatarios[] = [
+                    $planId,
+                    $contactoId ?: null,
                     mb_substr(trim((string) ($r['cedula'] ?? '')), 0, 20) ?: null,
                     mb_substr(trim((string) ($r['nombre'] ?? '')), 0, 150) ?: null,
-                    $destino, $canal,
+                    $destino,
+                    $canal,
                     json_encode($r['variables'] ?? [], JSON_UNESCAPED_UNICODE),
-                ]);
+                    'pendiente',
+                ];
+            }
+
+            foreach (array_chunk($destinatarios, 400) as $chunk) {
+                $ph = implode(',', array_fill(0, count($chunk), '(?,?,?,?,?,?,?,?)'));
+                $params = [];
+                foreach ($chunk as $d) { array_push($params, ...$d); }
+                $this->db->prepare(
+                    "INSERT IGNORE INTO com_destinatarios
+                        (plan_id, contacto_id, asociado_cedula, nombre, destino, canal, variables_json, estado)
+                     VALUES $ph"
+                )->execute($params);
             }
 
             $this->db->commit();

@@ -27,8 +27,16 @@ final class PortalAuth
 {
     private const SESSION_NAME = 'multiappv2_portal';
 
+    /** Cache del actor del portal para no reabrir la sesión tras liberarla. */
+    private static ?array $actorCache = null;
+    private static bool $actorResolved = false;
+    private static bool $sessionReleased = false;
+
     private static function boot(): void
     {
+        if (self::$sessionReleased) {
+            return;
+        }
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
@@ -63,11 +71,33 @@ final class PortalAuth
     /** Busca al asociado por cédula. Normaliza el documento (quita no-dígitos y ceros iniciales). */
     private static function asociadoPorDocumento(string $cedula): ?array
     {
-        // La cédula se guarda tal cual en sifone_asociados; comparamos numéricamente
-        // para tolerar diferencias de formato (legacy CAST AS UNSIGNED).
-        $st = db()->prepare('SELECT cedula, nombre, COALESCE(email,"") AS email, COALESCE(celular,"") AS celular
-                             FROM vw_asociados WHERE CAST(cedula AS UNSIGNED) = CAST(? AS UNSIGNED) LIMIT 1');
-        $st->execute([trim($cedula)]);
+        $raw = trim($cedula);
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+        $variantes = array_values(array_unique(array_filter([
+            $raw,
+            $digits,
+            $digits !== '' ? str_pad($digits, 10, '0', STR_PAD_LEFT) : '',
+        ], static fn(string $v): bool => $v !== '')));
+
+        if ($variantes) {
+            $ph = implode(',', array_fill(0, count($variantes), '?'));
+            $st = db()->prepare(
+                "SELECT cedula, nombre, COALESCE(email,'') AS email, COALESCE(celular,'') AS celular
+                 FROM vw_asociados WHERE cedula IN ($ph) LIMIT 1"
+            );
+            $st->execute($variantes);
+            $row = $st->fetch();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        // Fallback legacy para formatos atípicos (no se usa en el caso normal).
+        $st = db()->prepare(
+            "SELECT cedula, nombre, COALESCE(email,'') AS email, COALESCE(celular,'') AS celular
+             FROM vw_asociados WHERE CAST(cedula AS UNSIGNED) = CAST(? AS UNSIGNED) LIMIT 1"
+        );
+        $st->execute([$raw]);
         return $st->fetch() ?: null;
     }
 
@@ -89,6 +119,9 @@ final class PortalAuth
      */
     public static function login(string $cedula, string $password): ?array
     {
+        self::$actorCache = null;
+        self::$actorResolved = false;
+        self::$sessionReleased = false;
         self::boot();
         $cedula = trim($cedula);
         $clave = 'portal:' . ($_SERVER['REMOTE_ADDR'] ?? '') . ':' . $cedula;
@@ -264,9 +297,14 @@ final class PortalAuth
                 return ['tipo' => 'portal', 'cedula' => $ced, 'nombre' => '', 'email' => '', 'on_behalf' => true];
             }
         }
+        if (self::$actorResolved) {
+            return self::$actorCache;
+        }
         self::boot();
         $cedula = $_SESSION['cx_cedula'] ?? null;
         if ($cedula === null || $cedula === '') {
+            self::$actorResolved = true;
+            self::$actorCache = null;
             return null;
         }
         $lifetime = (int) (getenv('SESSION_LIFETIME') ?: 3600);
@@ -275,12 +313,14 @@ final class PortalAuth
             return null;
         }
         $_SESSION['cx_last_activity'] = time();
-        return [
+        self::$actorResolved = true;
+        self::$actorCache = [
             'tipo'   => 'portal',
             'cedula' => (string) $cedula,
             'nombre' => (string) ($_SESSION['cx_nombre'] ?? ''),
             'email'  => (string) ($_SESSION['cx_email'] ?? ''),
         ];
+        return self::$actorCache;
     }
 
     /** Exige asociado autenticado; corta con 401 JSON si no. */
@@ -291,11 +331,31 @@ final class PortalAuth
             Http::fail('No autenticado', 401);
         }
         Http::csrf();
+        self::releaseSession();
         return $a;
+    }
+
+    /**
+     * Libera el lock de sesión en lecturas. Las mutaciones conservan la sesión
+     * para no perder el contexto CSRF.
+     */
+    public static function releaseSession(): void
+    {
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($method !== 'GET' && $method !== 'HEAD') {
+            return;
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        self::$sessionReleased = true;
     }
 
     public static function logout(): void
     {
+        self::$actorCache = null;
+        self::$actorResolved = false;
+        self::$sessionReleased = false;
         self::boot();
         $cedula = $_SESSION['cx_cedula'] ?? null;
         if ($cedula) {

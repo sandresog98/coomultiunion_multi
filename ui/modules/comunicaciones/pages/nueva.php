@@ -371,8 +371,7 @@ async function cambiarCanal(){
   if(boxIA) boxIA.classList.remove('d-none');
   document.getElementById('fFormatoEmail').value='texto';
   cambiarFormatoEmail();
-  await cargarRemitentes();
-  await cargarPlantillas();
+  await Promise.all([cargarRemitentes(), cargarPlantillas()]);
   cambiarModo();actualizarPreview();actualizarResumen();
   renderSeleccionados();
   if(document.getElementById('qVarios').value.trim().length>=2) buscarVarios();

@@ -44,8 +44,8 @@ final class PagosService
             $where[] = "pc.confiar_id = ?";
             $params[] = $confiarId;
         }
-        if ($fechaDesde !== '') { $where[] = "DATE(p.fecha_resolucion) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta !== '') { $where[] = "DATE(p.fecha_resolucion) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde !== '') { $where[] = "p.fecha_resolucion >= ?"; $params[] = $fechaDesde . ' 00:00:00'; }
+        if ($fechaHasta !== '') { $where[] = "p.fecha_resolucion <= ?"; $params[] = $fechaHasta . ' 23:59:59'; }
         if ($asignacion === '0') {
             $where[] = "COALESCE(tx.usado, 0) = 0";
         } elseif ($asignacion === 'parcial') {
@@ -126,8 +126,8 @@ final class PagosService
                 $params[] = $estado;
             }
         }
-        if ($fechaDesde !== '') { $where[] = "DATE(c.fecha) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta !== '') { $where[] = "DATE(c.fecha) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde !== '') { $where[] = "c.fecha >= ?"; $params[] = $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = "c.fecha <= ?"; $params[] = $fechaHasta; }
         if ($asignacion === '0') {
             $where[] = "COALESCE(tx.usado, 0) = 0";
         } elseif ($asignacion === 'parcial') {

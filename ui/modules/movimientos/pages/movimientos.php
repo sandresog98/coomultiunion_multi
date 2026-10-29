@@ -115,8 +115,7 @@ const ACC=<?php echo json_encode($acc, JSON_UNESCAPED_UNICODE); ?>;
 const CAN_EDIT=ACC['movimientos.editar']===true,CAN_ELIM=ACC['movimientos.eliminar']===true;
 let state={q:'',tipo:'',desde:'',hasta:'',page:0,size:20,order:'fecha',dir:'DESC'};
 let editId=null, debounceTimer, modal, TIPOS={};
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.querySelectorAll('.sortable').forEach(th=>{
   th.addEventListener('click',()=>{
     const col=th.dataset.col;
@@ -252,6 +251,10 @@ function renderTipo(){
 }
 
 function abrir(r){
+  abrirAsync(r);
+}
+async function abrirAsync(r){
+  try{await cargarTipos();}catch(e){}
   editId=r?r.id:null;
   document.getElementById('mt').textContent=editId?'Editar movimiento':'Nuevo movimiento';
   document.getElementById('f_tipo').value=r?(r.tipo||''):'';
@@ -297,7 +300,11 @@ async function elim(id){
   catch(e){alert(e.message);}
 }
 
+let TIPOS_CARGADOS=false, TIPOS_PROMISE=null;
 async function cargarTipos(){
+  if(TIPOS_CARGADOS) return;
+  if(TIPOS_PROMISE) return TIPOS_PROMISE;
+  TIPOS_PROMISE=(async()=>{
   try{
     const rows=await api('movimientos_tipos/activos');
     TIPOS={};
@@ -306,7 +313,11 @@ async function cargarTipos(){
     selM.innerHTML=rows.map(t=>`<option value="${esc(t.tipo)}">${esc(t.nombre)}</option>`).join('')||'<option value="">Sin tipos</option>';
     selF.innerHTML='<option value="">Todos</option>'+rows.map(t=>`<option value="${esc(t.tipo)}">${esc(t.nombre)}</option>`).join('');
     renderTipo();
+    TIPOS_CARGADOS=true;
   }catch(e){alert(e.message);}
+  finally{TIPOS_PROMISE=null;}
+  })();
+  return TIPOS_PROMISE;
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
@@ -315,7 +326,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   setupAutocomplete('f_referido_input','f_referido','resRef');
   document.getElementById('m').addEventListener('hidden.bs.modal',()=>{document.getElementById('resIni').innerHTML='';document.getElementById('resRef').innerHTML='';ocultarDisponible();});
   window.Listado.mountSize('fSizeBox', state, cargar);
-  cargarTipos().then(()=>cargar());
+  cargar(); cargarTipos();
 });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

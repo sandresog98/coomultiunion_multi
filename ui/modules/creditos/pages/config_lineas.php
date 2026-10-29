@@ -56,8 +56,7 @@ const CAN_CREAR=ACC['creditos.config_lineas.crear']===true,CAN_EDIT=ACC['credito
 let editLineaId=null, modalLinea;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 async function cargarLineas(){
   try{
     const l=await api('creditos/lineas');

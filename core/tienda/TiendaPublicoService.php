@@ -38,10 +38,7 @@ final class TiendaPublicoService
         int $offset = 0
     ): array {
         // precio_venta = última compra con stock disponible COALESCE catálogo
-        $precioSql = "COALESCE((SELECT cd.precio_venta_sugerido FROM tienda_compra_detalles cd
-                       WHERE cd.producto_id = p.id AND cd.precio_venta_sugerido > 0
-                         AND EXISTS (SELECT 1 FROM tienda_stock s WHERE s.compra_detalle_id = cd.id AND s.estado = 'disponible')
-                       ORDER BY cd.id DESC LIMIT 1), p.precio_venta_sugerido)";
+        $precioSql = "COALESCE(pr.precio_venta_sugerido, p.precio_venta_sugerido)";
         // precio Multiunión = ROUND(precio - (precio * %/100), -3) con el rango vigente
         $multiunionSql = "ROUND($precioSql - ($precioSql * COALESCE((SELECT rp.porcentaje FROM tienda_rangos_precio rp
                           WHERE $precioSql BETWEEN rp.desde AND rp.hasta LIMIT 1), 0) / 100), -3)";
@@ -55,9 +52,18 @@ final class TiendaPublicoService
         if ($precioMax > 0) { $where[] = "$multiunionSql <= ?"; $params[] = $precioMax; }
         $w = 'WHERE ' . implode(' AND ', $where);
 
+        $precioJoin = "LEFT JOIN (
+            SELECT cd.producto_id, cd.precio_venta_sugerido,
+                   ROW_NUMBER() OVER (PARTITION BY cd.producto_id ORDER BY cd.id DESC) AS rn
+            FROM tienda_compra_detalles cd
+            WHERE cd.precio_venta_sugerido > 0
+              AND EXISTS (SELECT 1 FROM tienda_stock s WHERE s.compra_detalle_id = cd.id AND s.estado = 'disponible')
+        ) pr ON pr.producto_id = p.id AND pr.rn = 1";
+
         $st = $this->db->prepare("SELECT COUNT(*) FROM tienda_productos p
                                   JOIN tienda_categorias c ON c.id = p.categoria_id
-                                  JOIN tienda_marcas m ON m.id = p.marca_id $w");
+                                  JOIN tienda_marcas m ON m.id = p.marca_id
+                                  $precioJoin $w");
         $st->execute($params);
         $total = (int) $st->fetchColumn();
 
@@ -73,16 +79,20 @@ final class TiendaPublicoService
         $sql = "SELECT p.id, p.nombre, p.descripcion, p.foto_path, p.agotado, c.nombre AS categoria, m.nombre AS marca,
                        $precioSql AS precio_venta,
                        $multiunionSql AS precio_multiunion,
-                       (SELECT MAX(pr.precio_descuento) FROM tienda_promociones pr
-                         WHERE pr.producto_id = p.id AND pr.estado_activo = 1
-                           AND pr.fecha_inicio <= CURDATE() AND pr.fecha_fin >= CURDATE()) AS precio_descuento,
-                       (SELECT COUNT(*) FROM tienda_promociones pr
-                         WHERE pr.producto_id = p.id AND pr.estado_activo = 1
-                           AND pr.fecha_inicio <= CURDATE() AND pr.fecha_fin >= CURDATE()
-                           AND pr.precio_descuento > 0) AS en_promocion
+                       promo.precio_descuento AS precio_descuento,
+                       CASE WHEN promo.producto_id IS NULL THEN 0 ELSE 1 END AS en_promocion
                 FROM tienda_productos p
                 JOIN tienda_categorias c ON c.id = p.categoria_id
                 JOIN tienda_marcas m ON m.id = p.marca_id
+                $precioJoin
+                LEFT JOIN (
+                    SELECT producto_id, MAX(precio_descuento) AS precio_descuento
+                    FROM tienda_promociones
+                    WHERE estado_activo = 1
+                      AND fecha_inicio <= CURDATE() AND fecha_fin >= CURDATE()
+                      AND precio_descuento > 0
+                    GROUP BY producto_id
+                ) promo ON promo.producto_id = p.id
                 $w ORDER BY $orderSql LIMIT ? OFFSET ?";
 
         $st = $this->db->prepare($sql);

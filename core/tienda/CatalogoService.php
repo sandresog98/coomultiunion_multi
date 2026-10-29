@@ -291,16 +291,22 @@ final class CatalogoService
         $col = match ($orderBy) {
             'categoria' => 'c.nombre',
             'marca' => 'm.nombre',
-            'disponible' => '(SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = \'disponible\')',
+            'disponible' => 'COALESCE(st.disponible, 0)',
             default => "p.$orderBy",
         };
 
         $sql = "SELECT p.*, c.nombre AS categoria_nombre, m.nombre AS marca_nombre,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'disponible') AS disponible,
-                       (SELECT COUNT(*) FROM tienda_stock s WHERE s.producto_id = p.id AND s.estado = 'vendido') AS vendido
+                       COALESCE(st.disponible, 0) AS disponible,
+                       COALESCE(st.vendido, 0) AS vendido
                 FROM tienda_productos p
                 JOIN tienda_categorias c ON c.id = p.categoria_id
                 JOIN tienda_marcas m ON m.id = p.marca_id
+                LEFT JOIN (
+                    SELECT producto_id,
+                           SUM(CASE WHEN estado = 'disponible' THEN 1 ELSE 0 END) AS disponible,
+                           SUM(CASE WHEN estado = 'vendido' THEN 1 ELSE 0 END) AS vendido
+                    FROM tienda_stock GROUP BY producto_id
+                ) st ON st.producto_id = p.id
                 $w ORDER BY $col $orderDir LIMIT ? OFFSET ?";
         $st = $this->db->prepare($sql);
         foreach ($params as $i => $v) $st->bindValue($i + 1, $v);

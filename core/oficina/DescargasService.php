@@ -127,8 +127,8 @@ JOIN sifone_asociados sa ON sa.cedula = ca.cedula
 JOIN credito_reciente cr ON cr.cedula = sa.cedula AND cr.rn = 1
 LEFT JOIN sifone_cartera_mora m ON m.cedula = cr.cedula AND m.presta = cr.numero
 LEFT JOIN sifone_datacredito dv
-  ON CAST(dv.cedula AS UNSIGNED) = CAST(cr.cedula AS UNSIGNED)
- AND CAST(dv.numero_credito AS UNSIGNED) = CAST(cr.numero AS UNSIGNED)
+  ON dv.cedula_num = CAST(cr.cedula AS UNSIGNED)
+ AND dv.numero_num = CAST(cr.numero AS UNSIGNED)
 LEFT JOIN aportes_totales apt ON apt.cedula = sa.cedula
 WHERE ca.estado_activo = 1
 
@@ -182,8 +182,8 @@ JOIN sifone_cartera_aseguradora a ON a.cedula = sa.cedula
 LEFT JOIN credito_reciente cr ON cr.cedula = a.cedula AND cr.numero = a.numero AND cr.rn = 1
 LEFT JOIN sifone_cartera_mora m ON m.cedula = a.cedula AND m.presta = a.numero
 LEFT JOIN sifone_datacredito dv
-  ON CAST(dv.cedula AS UNSIGNED) = CAST(a.cedula AS UNSIGNED)
- AND CAST(dv.numero_credito AS UNSIGNED) = CAST(a.numero AS UNSIGNED)
+  ON dv.cedula_num = CAST(a.cedula AS UNSIGNED)
+ AND dv.numero_num = CAST(a.numero AS UNSIGNED)
 WHERE ca.estado_activo = 1
   AND cr.numero IS NULL
 
@@ -373,7 +373,7 @@ JOIN sifone_asociados sa ON sa.cedula = ca.cedula
 JOIN sifone_cartera_mora m ON m.cedula = sa.cedula
 LEFT JOIN sifone_cartera_aseguradora a ON a.cedula = m.cedula AND a.numero = m.presta
 LEFT JOIN sifone_datacredito dvco
-  ON CAST(dvco.numero_credito AS UNSIGNED) = CAST(TRIM(COALESCE(a.numero, m.presta)) AS UNSIGNED)
+  ON dvco.numero_num = CAST(TRIM(COALESCE(a.numero, m.presta)) AS UNSIGNED)
   AND dvco.codeudor = 1
 LEFT JOIN (
   SELECT ap.cedula, SUM(ap.monto) AS monto

@@ -36,34 +36,87 @@ final class CobranzaService
         $orderBy = in_array($orderBy, ['dias', 'total_mora', 'nombre', 'ultima_comunicacion', 'compromiso'], true) ? $orderBy : 'dias';
         $orderDir = strtoupper($orderDir) === 'ASC' ? 'ASC' : 'DESC';
 
-        $base = $this->unio();
+        // Solo se calcula la rama solicitada; el universo completo se usa cuando no hay filtro.
+        $base = $this->unio($tipoMora);
+
+        $comp = "
+            SELECT l.asociado_cedula, l.id AS comp_id, l.fecha AS comp_fecha,
+                   l.fecha_compromiso, l.monto_compromiso,
+                   COALESCE((
+                       SELECT SUM(t.valor_total) FROM transacciones t
+                       WHERE t.cedula = l.asociado_cedula
+                         AND t.fecha_creacion >= l.fecha
+                         AND t.fecha_creacion <= CONCAT(l.fecha_compromiso, ' 23:59:59')
+                   ), 0) AS suma_pagado
+            FROM (
+                SELECT id, asociado_cedula, fecha, fecha_compromiso, monto_compromiso,
+                       ROW_NUMBER() OVER (PARTITION BY asociado_cedula ORDER BY fecha DESC, id DESC) AS rn
+                FROM cobranza_comunicaciones
+                WHERE estado = 'comprometido' AND fecha_compromiso IS NOT NULL AND monto_compromiso IS NOT NULL
+            ) l
+            WHERE l.rn = 1
+        ";
+
+        $from = "FROM ($base) u LEFT JOIN ($comp) c ON c.asociado_cedula = u.cedula";
+        $select = "SELECT u.*, c.comp_id, c.fecha_compromiso AS comp_fecha_compromiso,
+                          c.monto_compromiso AS comp_monto, c.suma_pagado AS comp_suma_pagado,
+                          CASE
+                            WHEN c.comp_id IS NULL THEN ''
+                            WHEN CURDATE() <= c.fecha_compromiso THEN IF(c.suma_pagado >= c.monto_compromiso, 'cumplido', 'pendiente_tiempo')
+                            ELSE IF(c.suma_pagado >= c.monto_compromiso, 'cumplido', 'incumplido')
+                          END AS comp_key";
+
         $where = [];
         $params = [];
-        if ($tipoMora !== '') { $where[] = 'u.tipo_mora = ?'; $params[] = $tipoMora; }
+        if ($tipoMora !== '') { $where[] = 'x.tipo_mora = ?'; $params[] = $tipoMora; }
         if ($q !== '') {
-            $where[] = '(u.cedula LIKE ? OR u.nombre LIKE ? OR u.celular LIKE ? OR u.email LIKE ?)';
+            $where[] = '(x.cedula LIKE ? OR x.nombre LIKE ? OR x.celular LIKE ? OR x.email LIKE ?)';
             $l = '%' . $q . '%';
             array_push($params, $l, $l, $l, $l);
         }
-        if ($banda !== '') { $where[] = 'u.banda = ?'; $params[] = $banda; }
-        if ($rango !== '') { $where[] = 'u.rango = ?'; $params[] = $rango; }
-        if ($soloRemitidos) { $where[] = 'u.remitido_juridica = 1'; }
+        if ($banda !== '') { $where[] = 'x.banda = ?'; $params[] = $banda; }
+        if ($rango !== '') { $where[] = 'x.rango = ?'; $params[] = $rango; }
+        if ($soloRemitidos) { $where[] = 'x.remitido_juridica = 1'; }
+        if ($compromiso === 'sin') {
+            $where[] = "x.comp_key = ''";
+        } elseif ($compromiso !== '') {
+            $where[] = 'x.comp_key = ?';
+            $params[] = $compromiso;
+        }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        // Conjunto filtrado completo (sin LIMIT) → compromiso/orden/pagina en PHP.
-        $st = $this->db->prepare("SELECT u.* FROM ($base) u $w");
+        $orderCol = match ($orderBy) {
+            'nombre' => 'x.nombre',
+            'total_mora' => 'x.total_mora',
+            'ultima_comunicacion' => "COALESCE(x.ultima_comunicacion, '1970-01-01')",
+            'compromiso' => "CASE x.comp_key WHEN 'cumplido' THEN 1 WHEN 'pendiente_tiempo' THEN 2 WHEN 'incumplido' THEN 3 ELSE 9 END",
+            default => 'x.dias',
+        };
+
+        $st = $this->db->prepare("SELECT COUNT(*) FROM ($select $from) x $w");
         $st->execute($params);
+        $total = (int) $st->fetchColumn();
+
+        $st = $this->db->prepare(
+            "SELECT * FROM ($select $from) x $w ORDER BY $orderCol $orderDir, x.cedula ASC LIMIT ? OFFSET ?"
+        );
+        foreach ($params as $i => $v) { $st->bindValue($i + 1, $v); }
+        $st->bindValue(count($params) + 1, max(1, $limit), PDO::PARAM_INT);
+        $st->bindValue(count($params) + 2, max(0, $offset), PDO::PARAM_INT);
+        $st->execute();
         $rows = $st->fetchAll();
 
-        // Compromisos para todas las cédulas
-        $combe = array_column($rows, 'cedula');
-        $comps = $this->compromisosPorCedulas($combe);
-        $rank = ['cumplido' => 1, 'pendiente_tiempo' => 2, 'incumplido' => 3];
         foreach ($rows as &$r) {
-            $c = $comps[$r['cedula']] ?? null;
-            $r['compromiso'] = $c;
-            $r['compromiso_key'] = $c ? ($c['estado_compromiso'] ?? '') : '';
-            // auto-deshabilitar remisión jurídica si días en mora < días desde remisión
+            $r['compromiso'] = $r['comp_id'] !== null ? [
+                'estado_compromiso' => (string) $r['comp_key'],
+                'fecha_compromiso' => $r['comp_fecha_compromiso'],
+                'monto_compromiso' => (float) $r['comp_monto'],
+                'suma_pagado' => (float) $r['comp_suma_pagado'],
+            ] : null;
+            $r['compromiso_key'] = (string) ($r['comp_key'] ?? '');
+            unset($r['comp_id'], $r['comp_key'], $r['comp_fecha'], $r['comp_fecha_compromiso'], $r['comp_monto'], $r['comp_suma_pagado']);
+
+            // Auto-deshabilitar remisión jurídica si días en mora < días desde remisión.
             if ((int) $r['remitido_juridica'] === 1 && $r['fecha_remision'] && (int) $r['dias'] < $this->diasDesde((string) $r['fecha_remision'])) {
                 $this->desremitir($r['cedula'], null);
                 $r['remitido_juridica'] = '0';
@@ -72,79 +125,60 @@ final class CobranzaService
             $r['banda_label'] = $this->bandaLabel($r['banda']);
             $r['estado_color'] = $this->bandaColor($r['banda']);
         }
+        unset($r);
 
-        // Filtro por compromiso
-        if ($compromiso === 'sin') {
-            $rows = array_values(array_filter($rows, fn($r) => $r['compromiso_key'] === ''));
-        } elseif ($compromiso !== '') {
-            $rows = array_values(array_filter($rows, fn($r) => $r['compromiso_key'] === $compromiso));
-        }
-
-        // Orden en PHP
-        usort($rows, function ($a, $b) use ($orderBy, $orderDir, $rank) {
-            $cmp = $this->cmp($orderBy, $a, $b, $rank);
-            return $orderDir === 'ASC' ? $cmp : -$cmp;
-        });
-
-        $total = count($rows);
-        $rows = array_slice($rows, $offset, $limit);
         return ['rows' => $rows, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
     }
 
-    private function cmp(string $orderBy, array $a, array $b, array $rank): int
-    {
-        return match ($orderBy) {
-            'nombre' => strcasecmp((string) $a['nombre'], (string) $b['nombre']),
-            'total_mora' => (float) $a['total_mora'] <=> (float) $b['total_mora'],
-            'ultima_comunicacion' => strtotime((string) ($a['ultima_comunicacion'] ?: '1970-01-01')) <=> strtotime((string) ($b['ultima_comunicacion'] ?: '1970-01-01')),
-            'compromiso' => ($rank[$a['compromiso_key']] ?? 9) <=> ($rank[$b['compromiso_key']] ?? 9),
-            default => (int) $a['dias'] <=> (int) $b['dias'],
-        };
-    }
-
     /** UNION del universo de asociados en mora (crédito ∪ aportes). */
-    private function unio(): string
+    private function unio(string $tipo = ''): string
     {
-        return "
-         (SELECT m.cedula AS cedula, MAX(m.nombre) AS nombre, MAX(m.telefo) AS celular, MAX(m.mail) AS email,
-                 MAX(m.diav) AS dias, SUM(COALESCE(m.sdomor,0)) AS total_mora,
-                 'credito' AS tipo_mora,
-                 cc.ultima_comunicacion AS ultima_comunicacion, cc.total_comunicaciones AS total_comunicaciones,
-                 COALESCE(rj.remitido,0) AS remitido_juridica, rj.fecha_remision AS fecha_remision,
-                 CASE WHEN MAX(m.diav)<=30 THEN 'persuasiva' WHEN MAX(m.diav)<=90 THEN 'prejuridico' ELSE 'juridico' END AS banda,
-                 CASE WHEN cc.ultima_comunicacion IS NULL THEN 'sin'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<2 THEN 'muy_reciente'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<5 THEN 'reciente'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<10 THEN 'intermedia'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<=20 THEN 'lejana' ELSE 'muy_lejana' END AS rango
-           FROM sifone_cartera_mora m
-           LEFT JOIN (SELECT asociado_cedula, MAX(fecha) AS ultima_comunicacion, COUNT(*) AS total_comunicaciones
-                      FROM cobranza_comunicaciones WHERE tipo_origen='credito' GROUP BY asociado_cedula) cc ON cc.asociado_cedula=m.cedula
-           LEFT JOIN cobranza_remisiones_juridica rj ON rj.asociado_cedula=m.cedula
-           GROUP BY m.cedula, cc.ultima_comunicacion, cc.total_comunicaciones, rj.remitido, rj.fecha_remision)
-         UNION ALL
-         (SELECT ua.cedula AS cedula, MAX(sa.nombre) AS nombre, MAX(sa.celula) AS celular, MAX(sa.mail) AS email,
-                 DATEDIFF(CURDATE(), MAX(ua.ultima_aporte)) AS dias, 0 AS total_mora,
-                 'aportes' AS tipo_mora,
-                 cc.ultima_comunicacion AS ultima_comunicacion, cc.total_comunicaciones AS total_comunicaciones,
-                 0 AS remitido_juridica, NULL AS fecha_remision,
-                 CASE WHEN DATEDIFF(CURDATE(), MAX(ua.ultima_aporte))<=60 THEN '30_60'
-                      WHEN DATEDIFF(CURDATE(), MAX(ua.ultima_aporte))<=90 THEN '61_90' ELSE '90_mas' END AS banda,
-                 CASE WHEN cc.ultima_comunicacion IS NULL THEN 'sin'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<2 THEN 'muy_reciente'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<5 THEN 'reciente'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<10 THEN 'intermedia'
-                      WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<=20 THEN 'lejana' ELSE 'muy_lejana' END AS rango
-           FROM (SELECT t.cedula, MAX(t.fecham) AS ultima_aporte FROM sifone_movimientos_tributarios t
-                 WHERE t.cuenta='31050501' AND COALESCE(t.credit,0)>0 GROUP BY t.cedula) ua
-           INNER JOIN sifone_asociados sa ON sa.cedula = ua.cedula
-           INNER JOIN asociados_control ac ON ac.cedula = ua.cedula AND ac.estado_activo = 1
-           LEFT JOIN (SELECT DISTINCT cedula FROM sifone_cartera_mora) mor ON mor.cedula = ua.cedula
-           LEFT JOIN (SELECT asociado_cedula, MAX(fecha) AS ultima_comunicacion, COUNT(*) AS total_comunicaciones
-                      FROM cobranza_comunicaciones WHERE tipo_origen='aportes' GROUP BY asociado_cedula) cc ON cc.asociado_cedula = ua.cedula
-           WHERE mor.cedula IS NULL AND DATEDIFF(CURDATE(), ua.ultima_aporte) >= 30
-           GROUP BY ua.cedula, cc.ultima_comunicacion, cc.total_comunicaciones)
+        $credito = "
+           SELECT m.cedula AS cedula, MAX(m.nombre) AS nombre, MAX(m.telefo) AS celular, MAX(m.mail) AS email,
+                  MAX(m.diav) AS dias, SUM(COALESCE(m.sdomor,0)) AS total_mora,
+                  'credito' AS tipo_mora,
+                  cc.ultima_comunicacion AS ultima_comunicacion, cc.total_comunicaciones AS total_comunicaciones,
+                  COALESCE(rj.remitido,0) AS remitido_juridica, rj.fecha_remision AS fecha_remision,
+                  CASE WHEN MAX(m.diav)<=30 THEN 'persuasiva' WHEN MAX(m.diav)<=90 THEN 'prejuridico' ELSE 'juridico' END AS banda,
+                  CASE WHEN cc.ultima_comunicacion IS NULL THEN 'sin'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<2 THEN 'muy_reciente'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<5 THEN 'reciente'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<10 THEN 'intermedia'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<=20 THEN 'lejana' ELSE 'muy_lejana' END AS rango
+             FROM sifone_cartera_mora m
+             LEFT JOIN (SELECT asociado_cedula, MAX(fecha) AS ultima_comunicacion, COUNT(*) AS total_comunicaciones
+                        FROM cobranza_comunicaciones WHERE tipo_origen='credito' GROUP BY asociado_cedula) cc ON cc.asociado_cedula=m.cedula
+             LEFT JOIN cobranza_remisiones_juridica rj ON rj.asociado_cedula=m.cedula
+             GROUP BY m.cedula, cc.ultima_comunicacion, cc.total_comunicaciones, rj.remitido, rj.fecha_remision
         ";
+
+        $aportes = "
+           SELECT ua.cedula AS cedula, MAX(sa.nombre) AS nombre, MAX(sa.celula) AS celular, MAX(sa.mail) AS email,
+                  DATEDIFF(CURDATE(), MAX(ua.ultima_aporte)) AS dias, 0 AS total_mora,
+                  'aportes' AS tipo_mora,
+                  cc.ultima_comunicacion AS ultima_comunicacion, cc.total_comunicaciones AS total_comunicaciones,
+                  0 AS remitido_juridica, NULL AS fecha_remision,
+                  CASE WHEN DATEDIFF(CURDATE(), MAX(ua.ultima_aporte))<=60 THEN '30_60'
+                       WHEN DATEDIFF(CURDATE(), MAX(ua.ultima_aporte))<=90 THEN '61_90' ELSE '90_mas' END AS banda,
+                  CASE WHEN cc.ultima_comunicacion IS NULL THEN 'sin'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<2 THEN 'muy_reciente'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<5 THEN 'reciente'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<10 THEN 'intermedia'
+                       WHEN DATEDIFF(CURDATE(), cc.ultima_comunicacion)<=20 THEN 'lejana' ELSE 'muy_lejana' END AS rango
+             FROM (SELECT t.cedula, MAX(t.fecham) AS ultima_aporte FROM sifone_movimientos_tributarios t
+                   WHERE t.cuenta='31050501' AND COALESCE(t.credit,0)>0 GROUP BY t.cedula) ua
+             INNER JOIN sifone_asociados sa ON sa.cedula = ua.cedula
+             INNER JOIN asociados_control ac ON ac.cedula = ua.cedula AND ac.estado_activo = 1
+             LEFT JOIN (SELECT DISTINCT cedula FROM sifone_cartera_mora) mor ON mor.cedula = ua.cedula
+             LEFT JOIN (SELECT asociado_cedula, MAX(fecha) AS ultima_comunicacion, COUNT(*) AS total_comunicaciones
+                        FROM cobranza_comunicaciones WHERE tipo_origen='aportes' GROUP BY asociado_cedula) cc ON cc.asociado_cedula = ua.cedula
+             WHERE mor.cedula IS NULL AND DATEDIFF(CURDATE(), ua.ultima_aporte) >= 30
+             GROUP BY ua.cedula, cc.ultima_comunicacion, cc.total_comunicaciones
+        ";
+
+        if ($tipo === 'credito') { return $credito; }
+        if ($tipo === 'aportes') { return $aportes; }
+        return $credito . ' UNION ALL ' . $aportes;
     }
 
     /** Cumplimiento del último compromiso para un lote de cédulas (v2: transacciones.valor_total). */

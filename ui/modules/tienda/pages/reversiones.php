@@ -98,12 +98,11 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
 
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, UI=<?php echo json_encode(uiBaseUrl()); ?>;
-const UI=<?php echo json_encode(uiBaseUrl()); ?>;
 let stR={q:'',d1:'',page:0,size:20,order:'id',dir:'DESC'};
 let stB={q:'',est:'',page:0,size:20,order:'id',dir:'DESC'};
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return '$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function post(p,d){return api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});}
 function showA(id,m,ok){const e=document.getElementById(id);e.className='alert '+(ok?'alert-success':'alert-danger');e.textContent=m;e.classList.remove('d-none');}
 

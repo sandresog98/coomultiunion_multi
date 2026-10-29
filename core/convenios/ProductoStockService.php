@@ -62,10 +62,10 @@ final class ProductoStockService
             $params = array_merge($params, [$like, $like, $like, $like]);
         }
         if ($cedula !== '') { $where[] = "b.asociado_cedula LIKE ?"; $params[] = '%' . $cedula . '%'; }
-        if ($fechaCreacionDesde !== '') { $where[] = "DATE(b.fecha_creacion) >= ?"; $params[] = $fechaCreacionDesde; }
-        if ($fechaCreacionHasta !== '') { $where[] = "DATE(b.fecha_creacion) <= ?"; $params[] = $fechaCreacionHasta; }
-        if ($fechaVendidaDesde !== '') { $where[] = "DATE(b.fecha_vendida) >= ?"; $params[] = $fechaVendidaDesde; }
-        if ($fechaVendidaHasta !== '') { $where[] = "DATE(b.fecha_vendida) <= ?"; $params[] = $fechaVendidaHasta; }
+        if ($fechaCreacionDesde !== '') { $where[] = "b.fecha_creacion >= ?"; $params[] = $fechaCreacionDesde . ' 00:00:00'; }
+        if ($fechaCreacionHasta !== '') { $where[] = "b.fecha_creacion <= ?"; $params[] = $fechaCreacionHasta . ' 23:59:59'; }
+        if ($fechaVendidaDesde !== '') { $where[] = "b.fecha_vendida >= ?"; $params[] = $fechaVendidaDesde . ' 00:00:00'; }
+        if ($fechaVendidaHasta !== '') { $where[] = "b.fecha_vendida <= ?"; $params[] = $fechaVendidaHasta . ' 23:59:59'; }
         $w = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $st = $this->db->prepare(
@@ -195,17 +195,37 @@ final class ProductoStockService
         $n = 0;
         $this->db->beginTransaction();
         try {
+            // Prevalidar seriales existentes en bloque (evita una consulta por boleta).
+            $productIds = array_values(array_unique(array_map(static fn(array $it): int => (int) $it['producto_id'], $items)));
+            $seriales = array_values(array_unique(array_map(static fn(array $it): string => trim((string) $it['serial']), $items)));
+            $existentes = [];
+            $inProd = implode(',', array_fill(0, count($productIds), '?'));
+            foreach (array_chunk($seriales, 300) as $chunk) {
+                $inSer = implode(',', array_fill(0, count($chunk), '?'));
+                $stEx = $this->db->prepare(
+                    "SELECT producto_id, serial FROM boleteria_boletas
+                     WHERE producto_id IN ($inProd) AND serial IN ($inSer)"
+                );
+                $stEx->execute(array_merge($productIds, $chunk));
+                foreach ($stEx->fetchAll() as $r) {
+                    $existentes[(int) $r['producto_id'] . '|' . (string) $r['serial']] = true;
+                }
+            }
+
             $st = $this->db->prepare(
                 "INSERT INTO boleteria_boletas (producto_id, serial, numero_factura, precio_compra_snapshot,
                                                 precio_venta_snapshot, fecha_vencimiento, creado_por)
                  VALUES (?,?,?,?,?,?,?)"
             );
+            $eventos = [];
             foreach ($items as $it) {
                 $pid = (int) $it['producto_id'];
                 $serial = trim((string) $it['serial']);
-                if ($this->existeSerial($pid, $serial)) {
+                $clave = $pid . '|' . $serial;
+                if (isset($existentes[$clave])) {
                     throw new DomainException("El serial $serial ya existe para el producto.");
                 }
+                $existentes[$clave] = true;
                 $st->execute([
                     $pid, $serial,
                     trim((string) ($it['numero_factura'] ?? '')),
@@ -214,9 +234,25 @@ final class ProductoStockService
                     $actor['id'] ?? null,
                 ]);
                 $bid = (int) $this->db->lastInsertId();
-                $this->_evento($bid, $actor['id'] ?? null, 'crear', null, 'disponible', 'Boleta creada (carga masiva)');
+                $eventos[] = [$bid, $actor['id'] ?? null, 'crear', null, 'disponible', 'Boleta creada (carga masiva)'];
                 $n++;
             }
+
+            // Eventos en lotes (mismo efecto que _evento, sin preparar por fila).
+            try {
+                foreach (array_chunk($eventos, 500) as $chunk) {
+                    $ph = implode(',', array_fill(0, count($chunk), '(?,?,?,?,?,?)'));
+                    $params = [];
+                    foreach ($chunk as $e) { array_push($params, ...$e); }
+                    $this->db->prepare(
+                        "INSERT INTO boleteria_eventos (boleta_id, usuario_id, accion, estado_anterior, estado_nuevo, detalle)
+                         VALUES $ph"
+                    )->execute($params);
+                }
+            } catch (Throwable $e) {
+                error_log('[boleteria_eventos] ' . $e->getMessage());
+            }
+
             $this->db->commit();
             Logger::log('crear', 'boletas', $actor['id'] ?? null, "Carga masiva: $n boletas creadas", null, null, 'info');
             return $n;

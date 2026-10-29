@@ -372,8 +372,7 @@ function fmtNumInput(el){
 }
 function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleDateString('es-CO');}
 function estadoTxt(v){const s=String(v||'');return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
-async function apicall(p,o){let r=await fetch(API+p,o),j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function apicall(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function revealCard(el){
   if(!el||!el.classList.contains('d-none')) return;
   el.classList.remove('d-none');
