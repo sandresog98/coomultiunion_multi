@@ -86,8 +86,8 @@ let confiarData={};
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:2});}
-function fmtDt(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
-function fmtD(v){if(!v)return'—';let d=new Date(v);return isNaN(d.getTime())?'—':d.toLocaleDateString('es-CO');}
+function fmtD(v){if(!v)return'-';const s=String(v).slice(0,10),p=s.split('-');return p.length===3&&p[0]&&p[1]&&p[2]?`${p[2]}/${p[1]}/${p[0]}`:'-';}
+function fmtDt(v){if(!v)return'-';const s=String(v);if(/^\d{4}-\d{2}-\d{2}$/.test(s))return fmtD(s);let d=new Date(s.replace(' ','T'));return isNaN(d.getTime())?'-':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function apicall(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 document.querySelectorAll('.sortable').forEach(th=>{th.addEventListener('click',()=>{let c=th.dataset.col;if(state.order===c)state.dir=state.dir==='ASC'?'DESC':'ASC';else{state.order=c;state.dir='ASC'}state.page=0;cargar();});});
 function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{let c=th.dataset.col,a=state.order===c;th.classList.toggle('active',a);let t=th.textContent.trim().replace(/[▲▼]/g,''),ar=a?(state.dir==='ASC'?'▲':'▼'):'';th.innerHTML=t+(ar?` <span class="sort-icon">${ar}</span>`:'');});}
