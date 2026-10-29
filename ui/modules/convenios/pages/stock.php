@@ -235,7 +235,7 @@ function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt
 function money(v){v=Number(v||0);return'$'+v.toLocaleString('es-CO',{maximumFractionDigits:0});}
 function fmtDt(v){if(!v)return'—';let d=new Date(v.replace(' ','T'));return isNaN(d.getTime())?'—':d.toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'});}
 function showAlert(msg,ok=false){alertBox.className='alert alert-'+(ok?'success':'danger');alertBox.textContent=msg;alertBox.classList.remove('d-none');}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 function post(path,data){return api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}
 
 const ESTADO_BADGE={disponible:'<span class="badge text-bg-success">Disponible</span>',vendida:'<span class="badge text-bg-primary">Vendida</span>',contabilizada:'<span class="badge text-bg-dark">Contabilizada</span>',anulada:'<span class="badge text-bg-danger">Anulada</span>'};
@@ -251,10 +251,16 @@ function renderSortIcons(){document.querySelectorAll('.sortable').forEach(th=>{
   th.innerHTML=txt+(a?` <span class="sort-icon">${state.dir==='ASC'?'▲':'▼'}</span>`:'');
 });}
 
-async function cargarKpis(){
+let resumen0=null;
+async function cargarKpis(usarCache){
   try{
+    if (usarCache && state.prod===0 && resumen0) { aplicarKpis(resumen0.kpis||{}); return; }
     const d=await api('boletas/resumen?producto_id='+state.prod);
-    const k=d.kpis||{};
+    if(state.prod===0) resumen0=d;
+    aplicarKpis(d.kpis||{});
+  }catch(e){showAlert(e.message);}
+}
+function aplicarKpis(k){
     const cards=[
       ['Disponibles', k.disponibles||0, 'text-bg-success'],
       ['Vendidas', k.vendidas||0, 'text-bg-primary'],
@@ -266,13 +272,13 @@ async function cargarKpis(){
       <div class="col"><div class="card mb-0 ${c[2]} text-white"><div class="card-body py-2 px-3">
         <div class="small opacity-75">${c[0]}</div><div class="fw-bold fs-5">${c[1]}</div>
       </div></div></div>`).join('');
-  }catch(e){showAlert(e.message);}
 }
 
 async function cargarProductos(){
   try{
     const d=await api('boletas/resumen?producto_id=0');
-    const opts=(d.productos||[]).map(p=>`<option value="${p.id}" data-c="${p.precio_compra||0}" data-v="${p.precio_venta||0}">${esc(p.convenio_nombre)} — ${esc(p.nombre)}</option>`).join('');
+    if(state.prod===0) resumen0=d;
+    const opts=(d.productos||[]).map(p=>`<option value="${p.id}" data-c="${p.precio_compra||0}" data-v="${p.precio_venta||0}">${esc(p.convenio_nombre)} - ${esc(p.nombre)}</option>`).join('');
     document.getElementById('fProducto').innerHTML='<option value="0">Todos</option>'+opts;
     document.getElementById('n_producto').innerHTML='<option value="">Seleccione…</option>'+opts;
   }catch(e){showAlert(e.message);}
@@ -538,7 +544,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     state.page=0;cargar();
   }));
   document.getElementById('fProducto').addEventListener('change',function(){state.prod=parseInt(this.value||'0');state.page=0;cargar();cargarKpis();});
-  cargarProductos().then(()=>{cargarKpis();window.Listado.mountSize('fSizeBox', state, cargar, {class:'small text-muted'});cargar();});
+  cargarProductos().then(()=>cargarKpis(true));
+  window.Listado.mountSize('fSizeBox', state, cargar, {class:'small text-muted'});
+  cargar();
 });
 </script>
 <?php require dirname(__DIR__, 3) . '/views/layouts/footer.php'; ?>

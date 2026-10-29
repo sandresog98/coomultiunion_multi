@@ -47,8 +47,7 @@ let editAceptId=null, modalAcept;
 
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function slug(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,30);}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
-
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 async function cargarAcept(){try{const a=await api('creditos/config?ent=aceptaciones');
   document.getElementById('tbodyAcept').innerHTML=a.map(x=>`<tr><td>${esc(x.tipo)}</td><td>${esc(x.titulo||'')}</td><td class="text-truncate" style="max-width:300px">${esc(x.texto||'')}</td><td class="text-center">${x.obligatorio?'Sí':'No'}</td>
     <td class="text-end">${CAN_EDIT?`<button class="btn btn-sm btn-outline-primary me-1" onclick='abrirAcept(${JSON.stringify(x)})'><i class="fas fa-edit"></i></button>`:''}${CAN_DEL?`<button class="btn btn-sm btn-outline-danger" onclick="delAcept(${x.id})"><i class="fas fa-trash"></i></button>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="text-center text-muted">Sin aceptaciones</td></tr>';

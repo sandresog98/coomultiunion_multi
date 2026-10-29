@@ -22,3 +22,9 @@ Las migraciones `001`–`017` ya están incorporadas en `ddl.sql` y se eliminaro
   defina contra qué producto se validan sus pagos (ej. “Aportes”).
 - `019_perf_asociados_detalle.sql`: índices compuestos para la ficha de asociado (movimientos,
   cobranza, productos y agregados de aportes).
+- `020_perf_app_wide.sql`: índices transversales para logs, movimientos, pagos, tienda, boletas,
+  solicitudes y créditos.
+- `021_perf_views.sql`: columnas generadas numéricas en Sifone y reescritura de `vw_creditos`
+  para eliminar los `CAST` en los joins.
+- `022_perf_vw_productos.sql`: `vw_productos` calcula `vw_creditos` una sola vez.
+- `023_perf_pagos.sql`: índices de pagos por fecha y confirmación.

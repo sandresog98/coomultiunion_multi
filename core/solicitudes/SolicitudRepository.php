@@ -284,17 +284,22 @@ private const DETALLE_COLS = [
 
     public function insertarItemsBoleta(int $solicitudId, array $items): void
     {
-        $st = $this->db->prepare(
-            "INSERT INTO solicitudes_det_boleta_items (solicitud_id, producto_id, cantidad, precio_venta_snapshot)
-             VALUES (?,?,?,?)"
-        );
-        foreach ($items as $it) {
-            $st->execute([
-                $solicitudId,
-                (int) ($it['producto_id'] ?? 0),
-                max(1, (int) ($it['cantidad'] ?? 1)),
-                isset($it['precio_venta_snapshot']) ? (float) $it['precio_venta_snapshot'] : null,
-            ]);
+        if (!$items) { return; }
+        foreach (array_chunk($items, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '(?,?,?,?)'));
+            $params = [];
+            foreach ($chunk as $it) {
+                array_push($params,
+                    $solicitudId,
+                    (int) ($it['producto_id'] ?? 0),
+                    max(1, (int) ($it['cantidad'] ?? 1)),
+                    isset($it['precio_venta_snapshot']) ? (float) $it['precio_venta_snapshot'] : null
+                );
+            }
+            $this->db->prepare(
+                "INSERT INTO solicitudes_det_boleta_items (solicitud_id, producto_id, cantidad, precio_venta_snapshot)
+                 VALUES $ph"
+            )->execute($params);
         }
     }
 
@@ -314,11 +319,16 @@ private const DETALLE_COLS = [
     /** Persiste el vínculo solicitud↔boleta al emitir/sellar (efecto 'emitir_boletas'). */
     public function persistirVinculoBoleta(int $solicitudId, array $vinculos): void
     {
-        $st = $this->db->prepare(
-            "INSERT INTO solicitudes_boletas (solicitud_id, boleta_id, producto_id, item_id) VALUES (?,?,?,?)"
-        );
-        foreach ($vinculos as $v) {
-            $st->execute([$solicitudId, (int) $v['boleta_id'], $v['producto_id'] ?? null, $v['item_id'] ?? null]);
+        if (!$vinculos) { return; }
+        foreach (array_chunk($vinculos, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '(?,?,?,?)'));
+            $params = [];
+            foreach ($chunk as $v) {
+                array_push($params, $solicitudId, (int) $v['boleta_id'], $v['producto_id'] ?? null, $v['item_id'] ?? null);
+            }
+            $this->db->prepare(
+                "INSERT INTO solicitudes_boletas (solicitud_id, boleta_id, producto_id, item_id) VALUES $ph"
+            )->execute($params);
         }
     }
 

@@ -362,8 +362,8 @@ final class TransaccionService
             $where[] = "t.origen = ?";
             $params[] = $origen;
         }
-        if ($fechaDesde !== '') { $where[] = "DATE(t.fecha_creacion) >= ?"; $params[] = $fechaDesde; }
-        if ($fechaHasta !== '') { $where[] = "DATE(t.fecha_creacion) <= ?"; $params[] = $fechaHasta; }
+        if ($fechaDesde !== '') { $where[] = "t.fecha_creacion >= ?"; $params[] = strlen($fechaDesde) === 10 ? $fechaDesde . ' 00:00:00' : $fechaDesde; }
+        if ($fechaHasta !== '') { $where[] = "t.fecha_creacion <= ?"; $params[] = strlen($fechaHasta) === 10 ? $fechaHasta . ' 23:59:59' : $fechaHasta; }
         if ($valorMin !== null) { $where[] = "t.valor_total >= ?"; $params[] = $valorMin; }
         if ($valorMax !== null) { $where[] = "t.valor_total <= ?"; $params[] = $valorMax; }
         if ($recibo !== '') {
@@ -389,16 +389,28 @@ final class TransaccionService
         $st->execute();
         $rows = $st->fetchAll();
 
-        // Adjuntar detalles
+        if (!$rows) {
+            return ['rows' => [], 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+        }
+
+        // Detalles en una sola consulta (evita N+1 por transacción).
+        $ids = array_map(static fn(array $tx): int => (int) $tx['id'], $rows);
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stD = $this->db->prepare(
+            "SELECT d.*, p.nombre AS producto_nombre
+             FROM transacciones_detalle d
+             LEFT JOIN productos p ON p.id = d.producto_id
+             WHERE d.transaccion_id IN ($in)
+             ORDER BY d.id"
+        );
+        $stD->execute($ids);
+        $detalles = [];
+        foreach ($stD->fetchAll() as $det) {
+            $detalles[(int) $det['transaccion_id']][] = $det;
+        }
+
         foreach ($rows as &$tx) {
-            $stD = $this->db->prepare(
-                "SELECT d.*, p.nombre AS producto_nombre
-                 FROM transacciones_detalle d
-                 LEFT JOIN productos p ON p.id = d.producto_id
-                 WHERE d.transaccion_id = ? ORDER BY d.id"
-            );
-            $stD->execute([$tx['id']]);
-            $tx['detalles'] = $stD->fetchAll();
+            $tx['detalles'] = $detalles[(int) $tx['id']] ?? [];
             $tx['valor_asignado'] = 0.0;
             foreach ($tx['detalles'] as $det) {
                 $tx['valor_asignado'] += (float) ($det['valor_asignado'] ?? 0);

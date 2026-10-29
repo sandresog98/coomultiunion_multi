@@ -41,7 +41,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <script>
 const API=<?php echo json_encode(apiUrl()); ?>, U=<?php echo json_encode(uiBaseUrl()); ?>;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function api(p,o){const r=await fetch(API+p,o);const j=await r.json();if(!j.ok)throw new Error(j.error||'Error');return j.data;}
+function api(p,o){o=o||{};o.base=(typeof API!=="undefined"?API:(window.API||""));return window.Listado.api(p,o);}
 const inp=document.getElementById('fAsocInp'),hid=document.getElementById('fCedula'),res=document.getElementById('fAsocRes');let deb;
 inp.addEventListener('input',()=>{const q=(inp.value||'').trim();hid.value='';clearTimeout(deb);
   if(q.length<1){res.innerHTML='';return;}res.innerHTML='<div class="list-group-item text-muted">Buscando…</div>';
