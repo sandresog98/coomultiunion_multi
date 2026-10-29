@@ -1,0 +1,33 @@
+name: Guard PR to master
+
+# Regla: master solo recibe PRs desde develop.
+# Este workflow debe configurarse como status check obligatorio en la
+# protección/ruleset de master.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: Source branch must be develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          echo "PR desde: $HEAD_REPO/$HEAD_REF"
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::Los PR hacia master deben venir del repositorio oficial."
+            exit 1
+          fi
+          if [ "$HEAD_REF" != "develop" ]; then
+            echo "::error::Solo se permite PR desde develop hacia master."
+            exit 1
+          fi

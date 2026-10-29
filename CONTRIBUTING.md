@@ -68,6 +68,7 @@ Configurar en **Settings → Rules → Rulesets** (o *Branches*):
 - Dismiss stale approvals · Require conversation resolution.
 - Block force pushes · Restrict deletions.
 - No permitir push directo (incluido admin).
+- Exigir el check **Source branch must be develop** (`.github/workflows/guard-master-source.yml`).
 - (Opcional) Require linear history.
 
 ### `develop`
