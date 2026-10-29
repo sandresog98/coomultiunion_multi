@@ -26,6 +26,10 @@ $__envLabel = env_label();
     <link href="<?php echo assetUrl('vendor/tom-select/2.6.2/css/tom-select.bootstrap5.min.css'); ?>" rel="stylesheet">
     <link href="<?php echo assetUrl('css/common.css'); ?>" rel="stylesheet">
     <link href="<?php echo assetUrl('css/theme-dark.css'); ?>" rel="stylesheet">
+    <!-- Base de la API para todos los helpers. Se define aquí (y no solo en cada
+         página) para que Listado.api() funcione incluso con una versión antigua
+         cacheada de ui_helpers.js, que usa window.API como base. -->
+    <script>window.API = <?php echo json_encode(apiUrl()); ?>;</script>
     <script src="<?php echo assetUrl('js/ui_helpers.js'); ?>"></script>
     <script src="<?php echo assetUrl('js/solicitud_detalle.js'); ?>"></script>
 </head>

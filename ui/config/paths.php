@@ -25,5 +25,15 @@ function apiUrl(string $path = ''): string
 
 function assetUrl(string $path = ''): string
 {
-    return projectBaseUrl() . 'assets/' . ltrim($path, '/');
+    $path = ltrim($path, '/');
+    $url  = projectBaseUrl() . 'assets/' . $path;
+
+    // Cache-busting por fecha de modificación: evita que el navegador/CDN siga
+    // sirviendo un JS/CSS viejo después de un despliegue.
+    $file = dirname(__DIR__, 2) . '/assets/' . (string) parse_url($path, PHP_URL_PATH);
+    if ($path !== '' && is_file($file)) {
+        $url .= (str_contains($url, '?') ? '&' : '?') . 'v=' . filemtime($file);
+    }
+
+    return $url;
 }

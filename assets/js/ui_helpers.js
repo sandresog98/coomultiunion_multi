@@ -48,6 +48,10 @@
     // puede haber sido procesada y no conviene duplicarla.
     var maxIntentos = method === 'GET' ? 2 : 1;
 
+    if (!base) {
+      throw new Error('Base de API no configurada (window.API o opts.base)');
+    }
+
     function intento(n) {
       var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       var timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
@@ -68,7 +72,9 @@
           var espera = ra > 0 ? Math.min(ra, 3) * 1000 : 500;
           return new Promise(function (resolve) { setTimeout(resolve, espera); }).then(function () { return intento(n + 1); });
         }
-        throw new Error((out.j && out.j.error) || ('Error ' + out.r.status));
+        var mensaje = (out.j && out.j.error) || ('Error ' + out.r.status);
+        if (!out.j) mensaje += ' en ' + out.r.url;
+        throw new Error(mensaje);
       }, function (err) {
         if (timer) clearTimeout(timer);
         if (err && err.name === 'AbortError') {
