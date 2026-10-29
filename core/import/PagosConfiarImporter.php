@@ -59,10 +59,11 @@ class PagosConfiarImporter
             }
         }
 
+        $fecha = $this->assertUnaSolaFecha($rows);
         $records = $this->buildRecords($rows);
         $numRows = count($rows);
         if (empty($records)) {
-            $this->lastDiagnostics = ['filas_leidas' => $numRows, 'registros_validos' => 0, 'duplicados' => 0];
+            $this->lastDiagnostics = ['filas_leidas' => $numRows, 'registros_validos' => 0, 'duplicados' => 0, 'fecha' => $fecha];
             return 0;
         }
 
@@ -78,8 +79,105 @@ class PagosConfiarImporter
             'filas_leidas' => $numRows,
             'registros_validos' => count($records),
             'duplicados' => count($records) - count($toInsert),
+            'fecha' => $fecha,
         ];
         return $inserted;
+    }
+
+    /**
+     * Preflight sin insertar: valida una sola fecha y cuenta existentes/nuevos.
+     * @return array{fecha:string,fecha_label:string,total_archivo:int,existentes:int,nuevos:int,requiere_confirmacion:bool,mensaje:string}
+     * @throws \Throwable
+     */
+    public function preflight(string $filePath): array
+    {
+        $this->reader = new ExcelReader();
+        if (!$this->reader->load($filePath)) {
+            throw new \RuntimeException('No se pudo leer el archivo: ' . $this->reader->getError());
+        }
+
+        $headerRowIndex = $this->reader->detectHeaderRowByColumns(self::REQUIRED_KEYS, 50);
+        if ($headerRowIndex === null) {
+            throw new \RuntimeException('No se encontró la fila de encabezados con las columnas: FECHA, DESCRIPCION, DOCUMENTO, OFICINA, VALOR CONSIGNACION, VALOR RETIRO, SALDO.');
+        }
+
+        $rows = $this->reader->rowsWithHeadersStopAtEmpty($headerRowIndex, 'FECHA', 0);
+        if (empty($rows)) {
+            throw new \RuntimeException('No hay filas de datos después de la cabecera.');
+        }
+
+        $first = $rows[0];
+        foreach (self::REQUIRED_KEYS as $key) {
+            if (!$this->hasKey($first, $key)) {
+                throw new \RuntimeException('Falta columna requerida: ' . $key . '.');
+            }
+        }
+
+        $fecha = $this->assertUnaSolaFecha($rows);
+        $records = $this->buildRecords($rows);
+
+        $existingIds = $this->getExistingConfiarIds(array_column($records, 'confiar_id'));
+        $nuevos = 0;
+        foreach ($records as $r) {
+            if (!in_array($r['confiar_id'], $existingIds, true)) {
+                $nuevos++;
+            }
+        }
+
+        $st = $this->conn->prepare("SELECT COUNT(*) FROM pagos_confiar WHERE fecha = ?");
+        $st->execute([$fecha]);
+        $existentes = (int) $st->fetchColumn();
+
+        $dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
+        $label = $dt !== false ? $dt->format('d/m/Y') : $fecha;
+
+        return [
+            'fecha' => $fecha,
+            'fecha_label' => $label,
+            'total_archivo' => count($records),
+            'existentes' => $existentes,
+            'nuevos' => $nuevos,
+            'requiere_confirmacion' => $existentes > 0 && $nuevos > 0,
+            'mensaje' => $existentes > 0
+                ? sprintf('Ya hay %d movimientos para la fecha %s. Este archivo tiene %d nuevos. ¿Deseas continuar?', $existentes, $label, $nuevos)
+                : '',
+        ];
+    }
+
+    /**
+     * Rechaza archivos con más de una fecha y devuelve la única fecha (Y-m-d).
+     * @param array<int,array<string,mixed>> $rows
+     * @throws \DomainException
+     */
+    private function assertUnaSolaFecha(array $rows): string
+    {
+        $fechas = [];
+        foreach ($rows as $row) {
+            $fecha = $this->fechaToDateString($this->getRowVal($row, 'FECHA'));
+            if ($fecha !== null && $fecha !== '') {
+                $fechas[$fecha] = true;
+            }
+        }
+
+        if (count($fechas) === 0) {
+            throw new \DomainException('No se encontraron fechas válidas en el archivo.');
+        }
+
+        if (count($fechas) > 1) {
+            $lista = array_keys($fechas);
+            sort($lista);
+            $fmt = array_map(static function (string $f): string {
+                $d = \DateTimeImmutable::createFromFormat('!Y-m-d', $f);
+                return $d !== false ? $d->format('d/m/Y') : $f;
+            }, $lista);
+            $texto = count($fmt) === 2
+                ? $fmt[0] . ' y ' . $fmt[1]
+                : implode(', ', array_slice($fmt, 0, -1)) . ' y ' . $fmt[count($fmt) - 1];
+
+            throw new \DomainException('El archivo trae varias fechas: ' . $texto . '. Carga solo un día a la vez.');
+        }
+
+        return (string) array_key_first($fechas);
     }
 
     private function getRowVal(array $row, string $key): mixed
