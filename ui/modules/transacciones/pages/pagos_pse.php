@@ -61,10 +61,10 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
       <table class="table table-sm table-hover align-middle mb-0">
         <thead class="table-light"><tr>
           <th>Confiar ID</th><th>Fecha</th><th>Descripcion</th><th>Documento</th><th>Oficina</th>
-          <th class="text-end">Valor</th><th class="text-end">Cubierto PSE</th><th class="text-end">Disponible PSE</th>
+          <th class="text-end">Valor</th><th class="text-end">Saldo</th><th class="text-end">Cubierto PSE</th><th class="text-end">Disponible PSE</th>
           <th class="text-center">PSE</th><th></th>
         </tr></thead>
-        <tbody id="cc_confiar_tbody"><tr><td colspan="10" class="text-center text-muted">Cargando...</td></tr></tbody>
+        <tbody id="cc_confiar_tbody"><tr><td colspan="11" class="text-center text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div><div class="modal-footer"><span class="me-auto small text-muted" id="cc_footer_sel"></span><button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-brand" id="cc_btn_asignar" disabled>Asignar</button></div></form>
@@ -154,19 +154,19 @@ function setupConfiarTabla(){
 async function cargarConfiarTabla(q){
   const tb=document.getElementById('cc_confiar_tbody');
   if(!tb)return;
-  tb.innerHTML='<tr><td colspan="10" class="text-center text-muted">Cargando...</td></tr>';
+  tb.innerHTML='<tr><td colspan="11" class="text-center text-muted">Cargando...</td></tr>';
   try{
     let url='pagos/listar?tipo=confiar&descripcion=Credito ACH&disponible=1&limit=50&order=fecha&dir=DESC';
     if(q)url+='&q='+encodeURIComponent(q);
     const d=await apicall(url);
     const rows=(d.rows||[]).filter(r=>Number(r.pse_restante||0)>0 && (!r.confirmacion_estado||r.confirmacion_estado==='pendiente'));
     renderConfiarTabla(rows);
-  }catch(e){tb.innerHTML='<tr><td colspan="10" class="text-center text-danger">Error al cargar</td></tr>';}
+  }catch(e){tb.innerHTML='<tr><td colspan="11" class="text-center text-danger">Error al cargar</td></tr>';}
 }
 function renderConfiarTabla(rows){
   const tb=document.getElementById('cc_confiar_tbody');
   if(!tb)return;
-  if(!rows.length){tb.innerHTML='<tr><td colspan="10" class="text-center text-muted">Sin Credito ACH con saldo disponible</td></tr>';return;}
+  if(!rows.length){tb.innerHTML='<tr><td colspan="11" class="text-center text-muted">Sin Credito ACH con saldo disponible</td></tr>';return;}
   tb.innerHTML=rows.map(r=>{
     const rest=Number(r.pse_restante||0);
     return `<tr>
@@ -176,6 +176,7 @@ function renderConfiarTabla(rows){
       <td><small>${esc(r.documento||'')}</small></td>
       <td><small>${esc(r.oficina||'')}</small></td>
       <td class="text-end">${money(r.valor_consignacion)}</td>
+      <td class="text-end">${money(r.saldo)}</td>
       <td class="text-end">${money(r.pse_total)}</td>
       <td class="text-end"><strong>${money(rest)}</strong></td>
       <td class="text-center">${Number(r.pse_count||0)>0?r.pse_count:'-'}</td>

@@ -23,6 +23,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
           <div class="mb-3">
             <label class="form-label fw-semibold">Archivo (.xls / .xlsx)</label>
             <input class="form-control" type="file" id="archivo" accept=".xls,.xlsx" required>
+            <div class="form-text" id="hintConfiar" style="display:none">Pagos Confiar: el archivo debe traer una sola fecha. Si la fecha ya existe, se pedirá confirmación.</div>
           </div>
           <?php if ($canProcesar): ?>
           <button class="btn btn-brand w-100" id="btn" type="submit"><i class="fas fa-upload me-2"></i>Cargar y procesar</button>
@@ -53,7 +54,7 @@ require dirname(__DIR__, 3) . '/views/layouts/header.php';
 <script>
 const API = <?php echo json_encode(apiUrl()); ?>;
 const alertBox = document.getElementById('alert');
-function showAlert(m, ok=false){ alertBox.className='alert alert-'+(ok?'success':'danger'); alertBox.textContent=m; alertBox.classList.remove('d-none'); }
+function showAlert(m, ok=false, warning=false){ alertBox.className='alert alert-'+(warning?'warning':(ok?'success':'danger')); alertBox.textContent=m; alertBox.classList.remove('d-none'); }
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function badge(e){ const m={completado:'success',error:'danger',procesando:'warning',pendiente:'secondary'}; return `<span class="badge text-bg-${m[e]||'secondary'}">${esc(e)}</span>`; }
 
@@ -69,17 +70,39 @@ async function cargar(){
     <td class="text-end">${h.registros ?? ''}</td><td>${esc(h.usuario||'')}</td></tr>`).join('')
     || '<tr><td colspan="5" class="text-center text-muted">Sin cargas</td></tr>';
 }
+async function enviarCarga(tipo, file, confirmar){
+  const fd=new FormData(); fd.append('tipo',tipo); fd.append('archivo',file);
+  if(confirmar) fd.append('confirmar','1');
+  const r=await fetch(API+'cargas/procesar',{method:'POST',body:fd}); const j=await r.json();
+  if(!j.ok) throw new Error(j.error||'Error');
+  if(j.data && j.data.requiere_confirmacion && !confirmar){
+    if(window.confirm(j.data.mensaje)){
+      return enviarCarga(tipo,file,true);
+    }
+    return {cancelado:true};
+  }
+  return j.data;
+}
+
+document.getElementById('tipo').addEventListener('change',function(){
+  const hint=document.getElementById('hintConfiar');
+  if(hint) hint.style.display=this.value==='pagos_confiar'?'':'none';
+});
+
 document.getElementById('form').addEventListener('submit', async (e)=>{
   e.preventDefault(); alertBox.classList.add('d-none');
   const tipo=document.getElementById('tipo').value, file=document.getElementById('archivo').files[0];
   if(!tipo||!file){ showAlert('Seleccione tipo y archivo'); return; }
-  const fd=new FormData(); fd.append('tipo',tipo); fd.append('archivo',file);
   document.getElementById('btn').disabled=true; document.getElementById('prog').classList.remove('d-none');
   try{
-    const r=await fetch(API+'cargas/procesar',{method:'POST',body:fd}); const j=await r.json();
-    if(!j.ok) throw new Error(j.error||'Error');
-    showAlert(`Cargado: ${j.data.insertados} registros (${j.data.tipo}).`, true);
-    document.getElementById('form').reset();
+    const data=await enviarCarga(tipo,file,false);
+    if(data && data.cancelado){
+      showAlert('Carga cancelada. No se insertaron registros.', false, true);
+    }else{
+      showAlert(`Cargado: ${data.insertados} registros (${data.tipo}).`, true);
+      document.getElementById('form').reset();
+      document.getElementById('hintConfiar').style.display='none';
+    }
   }catch(err){ showAlert(err.message); }
   finally{ document.getElementById('btn').disabled=false; document.getElementById('prog').classList.add('d-none'); cargar(); }
 });

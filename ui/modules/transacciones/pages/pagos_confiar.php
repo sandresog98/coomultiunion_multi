@@ -7,6 +7,22 @@ $currentPage = 'pagos_confiar';
 require dirname(__DIR__, 3) . '/views/layouts/header.php';
 require_once dirname(__DIR__, 3) . '/config/paths.php';
 ?>
+<style>
+  #tbody .conf-id {
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: nowrap;
+  }
+  #tbody .desc-cell {
+    min-width: 280px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+  #tbody .valor-cell > div { white-space: nowrap; }
+</style>
 <div class="card">
   <div class="card-header brand d-flex justify-content-between align-items-center">
     <span><i class="fas fa-building-columns me-2"></i>Pagos Confiar</span>
@@ -30,14 +46,16 @@ require_once dirname(__DIR__, 3) . '/config/paths.php';
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle">
         <thead><tr>
-          <th class="sortable" data-col="confiar_id">CONF ID</th><th class="sortable text-end" data-col="valor_consignacion">Valor</th>
-          <th class="sortable text-end" data-col="usado">Usado</th><th class="sortable text-end" data-col="restante">Restante</th>
+          <th class="sortable" data-col="confiar_id">CONF ID</th>
+          <th class="sortable" data-col="descripcion">Descripción</th>
+          <th class="sortable text-end" data-col="valor_consignacion">Valor</th>
+          <th class="sortable" data-col="cedula">Cédula</th>
           <th class="sortable text-center" data-col="pse_count">PSE</th>
-          <th class="sortable" data-col="descripcion">Descripción</th><th class="sortable" data-col="cedula">Cédula</th>
-          <th class="sortable" data-col="confirmacion_estado">Estado</th><th class="text-center">Comp.</th>
-          <th class="sortable" data-col="fecha">Fecha</th><th></th>
+          <th class="sortable text-center" data-col="confirmacion_estado">Estado</th>
+          <th class="sortable" data-col="fecha">Fecha</th>
+          <th class="text-center">Acciones</th>
         </tr></thead>
-        <tbody id="tbody"><tr><td colspan="11" class="text-center text-muted">Cargando…</td></tr></tbody>
+        <tbody id="tbody"><tr><td colspan="8" class="text-center text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
     <nav id="paginacion" class="d-flex justify-content-center mt-3"></nav>
@@ -118,12 +136,24 @@ async function cargar(){
       else if(est==='pendiente')acc=`<div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="abrirConfirmar('${esc(r.confiar_id)}')" title="Asignar"><i class="fas fa-user-check"></i></button><button class="btn btn-outline-danger" onclick="abrirRechazar('${esc(r.confiar_id)}')" title="No válido"><i class="fas fa-ban"></i></button></div>`;
       else acc=`<button class="btn btn-sm btn-outline-secondary" onclick="desasignarConfiar('${esc(r.confiar_id)}')" title="Revertir a pendiente"><i class="fas fa-undo"></i></button>`;
       if(Number(r.pse_count||0)>0 && est==='pendiente')acc=acc.replace(/<button[^>]*abrirConfirmar[^>]*>.*?<\/button>/,'');
-      if(Number(r.pse_count||0)>0)acc=`<button class="btn btn-sm btn-outline-info me-1" onclick="verPseDetalle('${esc(r.confiar_id)}')" title="Cubierto por ${r.pse_count} PSE; gestiónalo en Pagos PSE"><i class="fas fa-link"></i> PSE</button>`+acc;
       let pseCell=Number(r.pse_count||0)>0
         ? `<button class="btn btn-sm btn-outline-info" onclick="verPseDetalle('${esc(r.confiar_id)}')" title="PSE conciliados: ${r.pse_count} (${money(r.pse_total)})">${r.pse_count}</button><div class="small text-muted">${money(r.pse_total)}</div>`
         : '<span class="text-muted">&#8212;</span>';
-      return`<tr><td><small>${esc(r.confiar_id)}</small></td><td class="text-end">${money(r.valor_consignacion)}</td><td class="text-end">${money(r.usado)}</td><td class="text-end">${money(r.restante)}</td><td class="text-center">${pseCell}</td><td class="text-truncate" style="max-width:180px">${esc(r.descripcion)}</td><td>${esc(cedula)}</td><td><span class="badge text-bg-${estadoClass}">${esc(estadoLabel)}</span></td><td class="text-center">${r.ruta_comprobante?`<a href="${API}pagos/serve_file?f=${encodeURIComponent(r.ruta_comprobante)}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-file"></i></a>`:'—'}</td><td><small>${fmtDt(r.fecha)}</small></td><td>${acc}</td></tr>`;
-    }).join('')||'<tr><td colspan="11" class="text-center text-muted">Sin resultados</td></tr>';
+      return`<tr>
+  <td><span class="conf-id">${esc(r.confiar_id)}</span></td>
+  <td class="desc-cell">${esc(r.descripcion)}</td>
+  <td class="text-end valor-cell">
+    <div>Total: <strong>${money(r.valor_consignacion)}</strong></div>
+    <div class="small text-muted">Usado: ${money(r.usado)}</div>
+    <div class="small text-muted">Restante: ${money(r.restante)}</div>
+  </td>
+  <td class="text-nowrap">${esc(cedula)}</td>
+  <td class="text-center">${pseCell}</td>
+  <td class="text-center"><span class="badge text-bg-${estadoClass}">${esc(estadoLabel)}</span></td>
+  <td class="text-nowrap"><small>${fmtDt(r.fecha)}</small></td>
+  <td class="text-center">${acc}</td>
+</tr>`;
+    }).join('')||'<tr><td colspan="8" class="text-center text-muted">Sin resultados</td></tr>';
     renderPagination(t);
   }catch(e){alertBox.className='alert alert-danger';alertBox.textContent=e.message;alertBox.classList.remove('d-none');}
 }

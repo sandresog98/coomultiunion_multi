@@ -64,9 +64,9 @@ final class CargaService
 
     /**
      * Procesa un archivo subido ($_FILES['archivo']).
-     * @return array stats del importador + id del job
+     * @return array stats del importador + id del job, o advertencia de confirmación
      */
-    public function procesarSubida(string $tipo, array $file, ?int $usuarioId): array
+    public function procesarSubida(string $tipo, array $file, ?int $usuarioId, bool $confirmar = false): array
     {
         if (!in_array($tipo, $this->tipos(), true)) {
             throw new DomainException('Tipo de carga no soportado.');
@@ -80,6 +80,24 @@ final class CargaService
         }
         if (($file['size'] ?? 0) > self::MAX_MB * 1024 * 1024) {
             throw new DomainException('El archivo supera ' . self::MAX_MB . ' MB.');
+        }
+
+        // Confiar: preflight sobre una copia temporal con extensión, antes de guardar en uploads.
+        if ($tipo === 'pagos_confiar' && !$confirmar) {
+            $tmpFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'confiar_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            if (!@copy($file['tmp_name'], $tmpFile)) {
+                throw new DomainException('No se pudo preparar el archivo para validar.');
+            }
+            try {
+                $preflight = (new PagosConfiarImporter())->preflight($tmpFile);
+            } catch (Throwable $e) {
+                throw $e instanceof DomainException ? $e : new DomainException('Error al procesar: ' . $e->getMessage());
+            } finally {
+                @unlink($tmpFile);
+            }
+            if (!empty($preflight['requiere_confirmacion'])) {
+                return $preflight;
+            }
         }
 
         $ruta = $this->guardarArchivo($tipo, $file, $ext);
