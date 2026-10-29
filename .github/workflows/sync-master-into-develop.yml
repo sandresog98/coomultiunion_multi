@@ -1,0 +1,67 @@
+name: Sync master into develop
+
+# Evita que develop quede atrás de master por los squash merges de los PR
+# develop -> master. Si master tiene commits que develop no tiene, crea una
+# rama automation/sync-master-into-develop y abre/actualiza un PR hacia develop.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-master-into-develop
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Back-merge master into develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Check if master is ahead
+        id: check
+        run: |
+          git fetch origin master
+          behind=$(git rev-list --count HEAD..origin/master)
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          echo "master commits not in develop: $behind"
+
+      - name: Merge master into automation branch
+        if: steps.check.outputs.behind != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B automation/sync-master-into-develop
+          git merge --no-edit origin/master
+          git push --force-with-lease origin HEAD:automation/sync-master-into-develop
+
+      - name: Create or update pull request
+        if: steps.check.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list \
+            --base develop \
+            --head automation/sync-master-into-develop \
+            --state open \
+            --json number \
+            --jq '.[0].number')
+
+          if [ -n "$existing" ]; then
+            echo "PR ya existe: #$existing"
+          else
+            gh pr create \
+              --base develop \
+              --head automation/sync-master-into-develop \
+              --title "chore: sincronizar master en develop" \
+              --body "Back-merge automático de \`master\` hacia \`develop\` para evitar divergencia por squash merges. No requiere cambios manuales si no hay conflictos."
+          fi
